@@ -18,7 +18,7 @@ The plugin is a designer-facing adapter and the CLI is a developer/automation ad
 | `plugin` | Designer panel and UXP-facing entry point | Calls shared core; host access through adapter |
 | `test-support` | Fake host, reusable inventories, architecture checks | Test-only |
 
-Use TypeScript, pnpm workspaces, project-reference type checking, ESLint boundary rules, Vitest, and fast-check. Keep core code free of Node and UXP globals so it can be bundled for both Node and UXP.
+Use TypeScript 7, pnpm workspaces, project-reference type checking, ESLint boundary rules, Vitest, and fast-check. The shared publishing packages use an ES2020 syntax and library baseline, which keeps the core bundle compatible with the documented UXP target. The CLI may run on a newer Node runtime without raising the shared-core baseline. The plugin type-checks against Adobe's UXP definitions without the browser `DOM` library. TypeScript 6's compatibility package is installed under the `typescript` alias only for the current typescript-eslint parser; `tsc` remains TypeScript 7.
 
 ## Data model
 
@@ -43,13 +43,13 @@ Use UXP for host integration. Retain an ExtendScript shim only if a required DOM
 
 ## CLI and plugin
 
-Offline CLI commands parse Markdown, validate inventories, and produce plans. Host commands submit versioned jobs and return `HostUnavailable` when no runner is connected. The plugin panel supports designer annotation and validation and processes queued jobs while open. UXP file selection and persistent permission behavior must be host-probed before relying on the queue transport; the queue contract itself is host-independent.
+Offline CLI commands parse Markdown, validate inventories, and produce plans. Host commands submit versioned jobs and return `HostUnavailable` when no runner is connected. The panel validates Markdown, shows a semantic outline and diagnostics, and uses the same core as the CLI. A Vite preview and happy-dom tests cover UI behavior without InDesign. The panel's host actions, annotation, and queue processing still require UXP implementation and host verification. UXP file selection and persistent permission behavior must be host-probed before relying on the queue transport; the queue contract itself is host-independent.
 
 Publishing in v1 writes a new output document so earlier `.indd` files and manual edits remain intact. Partial in-place synchronization is deferred; generated-document reflow is in scope.
 
 ## Milestones
 
-1. **Offline foundation:** workspace, versioned contracts, parser, template compiler, planner, fake host, CLI, minimal panel, ADRs, and boundary enforcement. Complete while Adobe software is unavailable.
+1. **Offline foundation:** workspace, versioned contracts, parser, template compiler, planner, fake host, CLI, designer-facing article validation panel, ADRs, boundary enforcement, and host-free CI. Complete while Adobe software is unavailable.
 2. **Adversarial corpus:** long Chinese and mixed-language articles, punctuation, long headings, section changes, quotes, images/captions, missing assets/styles, malformed templates, overset, font substitution, reflow, large documents, and serialization round trips. Add deterministic snapshots, invariants, and seeded property tests.
 3. **Host contracts:** individual UXP probes for style operations, keyed labels and save/reopen, parent pages/page duplication, story creation/threading/overset, anchors, graphics/fitting/wrap, export, font substitution, and stable identity. Add confirmed behavior to contract tests.
 4. **Golden publishing:** synthetic then designer templates, compare IR and canonical dumps, render with pinned InDesign/font/template versions, and maintain reviewed image-diff baselines in a separate host lane.

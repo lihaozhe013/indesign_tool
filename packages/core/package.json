@@ -2,16 +2,22 @@
   "name": "@publisher/core",
   "version": "0.1.0",
   "type": "module",
-  "exports": { ".": "./dist/index.js" },
+  "exports": {
+    ".": "./dist/index.js"
+  },
   "types": "./dist/index.d.ts",
   "dependencies": {
     "@publisher/contracts": "workspace:*",
+    "remark-frontmatter": "^5.0.0",
     "remark-gfm": "^4.0.1",
     "remark-parse": "^11.0.0",
-    "remark-frontmatter": "^5.0.0",
     "unified": "^11.0.5",
-    "yaml": "^2.8.1"
+    "yaml": "^2.9.1"
   },
-  "devDependencies": { "@publisher/test-support": "workspace:*" },
-  "scripts": { "build": "tsc -b" }
+  "devDependencies": {
+    "@publisher/test-support": "workspace:*"
+  },
+  "scripts": {
+    "build": "tsc -b"
+  }
 }

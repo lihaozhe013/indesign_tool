@@ -1,25 +1,112 @@
 <!doctype html>
-<html>
+<html lang="en">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Structured Publisher</title>
     <style>
-      body { font: 13px sans-serif; padding: 12px; color: #252525; }
-      textarea { box-sizing: border-box; width: 100%; min-height: 220px; resize: vertical; }
-      button { margin-top: 8px; }
-      pre { white-space: pre-wrap; overflow-wrap: anywhere; }
-      .muted { color: #666; }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: #f4f4f4; color: #262626; font: 12px/1.45 sans-serif; }
+      button, textarea { font: inherit; }
+      button { cursor: pointer; }
+      button:focus, textarea:focus { outline: 2px solid #1473e6; outline-offset: 1px; }
+      #publisher-panel { min-height: 100vh; max-width: 380px; margin: 0 auto; padding: 14px; }
+      .panel-header { margin-bottom: 14px; }
+      .eyebrow { margin: 0 0 3px; color: #666; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+      h1 { margin: 0; font-size: 18px; font-weight: 600; }
+      .intro { margin: 4px 0 10px; color: #666; }
+      #validation-status { display: inline-block; padding: 3px 8px; border-radius: 12px; background: #e8e8e8; color: #505050; font-weight: 600; }
+      #validation-status[data-state="valid"] { background: #e4f4e8; color: #176b32; }
+      #validation-status[data-state="warning"] { background: #fff2cc; color: #805b00; }
+      #validation-status[data-state="error"] { background: #fce8e6; color: #b42318; }
+      .summary { display: flex; margin: 0 0 12px; padding: 10px 12px; border: 1px solid #dedede; border-radius: 6px; background: #fff; }
+      .summary-item { flex: 1; }
+      .summary-label { display: block; color: #666; font-size: 10px; }
+      .summary-value { display: block; margin-top: 2px; font-size: 15px; font-weight: 600; }
+      .tab-list { display: flex; border-bottom: 1px solid #d5d5d5; }
+      .tab { flex: 1; min-height: 34px; padding: 7px 4px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: #5a5a5a; }
+      .tab[aria-selected="true"] { border-bottom-color: #1473e6; color: #1d1d1d; font-weight: 600; }
+      .tab-count { margin-left: 4px; color: #b42318; font-weight: 700; }
+      .tab-panel { padding-top: 12px; }
+      .field-label { display: block; margin-bottom: 5px; font-weight: 600; }
+      .editor-actions { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+      .text-button { padding: 3px 0; border: 0; background: transparent; color: #1473e6; }
+      textarea { display: block; width: 100%; min-height: 210px; padding: 9px; border: 1px solid #c9c9c9; border-radius: 5px; background: #fff; color: #262626; line-height: 1.5; resize: vertical; }
+      .primary-button { width: 100%; min-height: 34px; margin-top: 9px; border: 0; border-radius: 5px; background: #1473e6; color: #fff; font-weight: 600; }
+      .primary-button:hover { background: #0d66d0; }
+      .helper { margin: 8px 0 0; color: #707070; font-size: 11px; }
+      .article-preview { margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #dedede; }
+      .article-preview h2 { margin: 0; font-size: 16px; line-height: 1.3; }
+      #article-byline { margin: 4px 0 0; color: #666; }
+      .outline-list, .diagnostic-list { margin: 0; padding: 0; list-style: none; }
+      .outline-item { display: flex; align-items: flex-start; padding: 8px 0; border-bottom: 1px solid #e3e3e3; }
+      .block-badge { flex: 0 0 56px; color: #666; font-size: 10px; font-weight: 700; text-transform: uppercase; }
+      .block-preview { min-width: 0; overflow-wrap: anywhere; }
+      .diagnostic-item { display: flex; flex-direction: column; padding: 9px 0; border-bottom: 1px solid #e3e3e3; }
+      .diagnostic-severity { margin-bottom: 2px; color: #b42318; text-transform: capitalize; }
+      .diagnostic-item[data-severity="warning"] .diagnostic-severity { color: #805b00; }
+      .diagnostic-item[data-severity="info"] .diagnostic-severity { color: #4b5563; }
+      .diagnostic-path { margin-top: 3px; color: #707070; }
+      .empty-state { padding: 16px 8px; color: #707070; text-align: center; }
+      [hidden] { display: none; }
     </style>
-    <script src="./dist/index.js"></script>
+    <script defer src="./dist/index.js"></script>
   </head>
   <body>
-    <h2>Structured Publisher</h2>
-    <p class="muted">Validate structured Markdown with the shared publishing core.</p>
-    <textarea id="article" aria-label="Article Markdown"># Sample article
+    <main id="publisher-panel">
+      <header class="panel-header">
+        <p class="eyebrow">Publishing workspace</p>
+        <h1>Structured Publisher</h1>
+        <p class="intro">Check article structure before InDesign composes the page.</p>
+        <span id="validation-status" data-state="idle" role="status" aria-live="polite">Ready to validate</span>
+      </header>
 
-This paragraph will be composed by InDesign.</textarea>
-    <button id="validate" type="button">Validate article</button>
-    <pre id="result" aria-live="polite">Ready.</pre>
+      <section class="summary" aria-label="Article summary">
+        <div class="summary-item">
+          <span class="summary-label">Content blocks</span>
+          <span class="summary-value" id="block-count">—</span>
+        </div>
+        <div class="summary-item">
+          <span class="summary-label">Issues</span>
+          <span class="summary-value" id="issue-count">—</span>
+        </div>
+      </section>
+
+      <div class="tab-list" role="tablist" aria-label="Article workspace">
+        <button class="tab" id="tab-article" type="button" role="tab" data-tab="article" aria-controls="panel-article" aria-selected="true">Article</button>
+        <button class="tab" id="tab-outline" type="button" role="tab" data-tab="outline" aria-controls="panel-outline" aria-selected="false">Outline</button>
+        <button class="tab" id="tab-diagnostics" type="button" role="tab" data-tab="diagnostics" aria-controls="panel-diagnostics" aria-selected="false">Issues<span class="tab-count" id="tab-issue-count"></span></button>
+      </div>
+
+      <section class="tab-panel" id="panel-article" role="tabpanel" data-panel="article" aria-labelledby="tab-article">
+        <div class="editor-actions">
+          <label class="field-label" for="article-input">Markdown source</label>
+          <button class="text-button" id="load-example" type="button">Load example</button>
+        </div>
+        <textarea id="article-input" aria-label="Article Markdown" spellcheck="false"># A better publishing workflow
+
+This sample article shows how structured content can be checked before it is composed in InDesign.
+
+## Keep the source semantic
+
+Use headings, paragraphs, quotes, and standalone images to describe the article.</textarea>
+        <button class="primary-button" id="validate-article" type="button">Validate article</button>
+        <p class="helper">InDesign remains responsible for typography and text composition.</p>
+      </section>
+
+      <section class="tab-panel" id="panel-outline" role="tabpanel" data-panel="outline" aria-labelledby="tab-outline" hidden>
+        <div class="article-preview">
+          <h2 id="article-title">No article preview</h2>
+          <p id="article-byline"></p>
+        </div>
+        <ol class="outline-list" id="article-outline" aria-label="Parsed article blocks"></ol>
+        <p class="empty-state" id="outline-empty">Validate an article to see its structure.</p>
+      </section>
+
+      <section class="tab-panel" id="panel-diagnostics" role="tabpanel" data-panel="diagnostics" aria-labelledby="tab-diagnostics" hidden>
+        <ul class="diagnostic-list" id="diagnostic-list" aria-label="Validation issues"></ul>
+        <p class="empty-state" id="diagnostics-empty">Validate an article to see diagnostics.</p>
+      </section>
+    </main>
   </body>
 </html>

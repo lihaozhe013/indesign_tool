@@ -7,7 +7,8 @@
     "@publisher/core": "workspace:*"
   },
   "scripts": {
-    "build": "tsc -b && esbuild src/index.ts --bundle --format=iife --platform=browser --target=es2022 --outfile=dist/index.js",
-    "typecheck": "tsc -b"
+    "build": "tsc -b && esbuild src/index.ts --bundle --format=iife --platform=browser --target=es2020 --outfile=dist/index.js",
+    "typecheck": "tsc -b",
+    "dev": "vite --host 127.0.0.1"
   }
 }

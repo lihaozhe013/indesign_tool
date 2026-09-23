@@ -3,8 +3,9 @@
   "compilerOptions": {
     "rootDir": "src",
     "outDir": "dist",
-    "lib": ["ES2022", "DOM"],
-    "types": []
+    "lib": ["ES2020"],
+    "typeRoots": ["../../node_modules/@types", "../../node_modules/@adobe/cc-ext-uxp-types"],
+    "types": ["uxp"]
   },
   "references": [{ "path": "../contracts" }, { "path": "../core" }],
   "include": ["src/**/*.ts"],

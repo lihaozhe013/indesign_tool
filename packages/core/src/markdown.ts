@@ -149,7 +149,7 @@ function phrasingRuns(nodes: PhrasingContent[], diagnostics: Diagnostic[], path:
   const runs: TextRun[] = [];
   const append = (text: string, marks: TextRun["marks"], href?: string): void => {
     if (!text) return;
-    const last = runs.at(-1);
+    const last = runs[runs.length - 1];
     if (last && sameMarks(last.marks, marks) && last.href === href) last.text += text;
     else runs.push({ text, marks, ...(href ? { href } : {}) });
   };

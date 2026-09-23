@@ -25,6 +25,18 @@ describe("package architecture", () => {
     const sources = await Promise.all(files.map((file) => readFile(file, "utf8")));
     for (const source of sources) expect(source).not.toMatch(/(?:from\s*|require\s*\()(["'])indesign\1/);
   });
+
+  it("keeps source and the UXP bundle within the ES2020 runtime API baseline", async () => {
+    const packageSources = await Promise.all(["contracts", "core", "template", "plugin"]
+      .map((name) => collect(resolve(root, "packages", name, "src"))));
+    const files = packageSources.flat();
+    const sources = await Promise.all(files.map((file) => readFile(file, "utf8")));
+    const bundle = await readFile(resolve(root, "packages/plugin/dist/index.js"), "utf8");
+    const unsupportedRuntimeApi = /\.(?:at|toSorted|toReversed|findLast|findLastIndex|replaceAll)\s*\(/;
+
+    for (const source of sources) expect(source).not.toMatch(unsupportedRuntimeApi);
+    expect(bundle).not.toMatch(unsupportedRuntimeApi);
+  });
 });
 
 async function collect(directory: string): Promise<string[]> {

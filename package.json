@@ -1,27 +1,32 @@
 {
   "name": "structured-publishing-toolkit",
   "private": true,
-  "packageManager": "pnpm@12.4.1",
+  "packageManager": "pnpm@12.5.1",
   "engines": {
-    "node": ">=22"
+    "node": "^22.13.0 || >=24.0.0"
   },
   "scripts": {
     "build": "pnpm -r --if-present build",
     "dev": "tsx packages/cli/src/main.ts",
     "lint": "eslint .",
     "test": "pnpm build && vitest run",
-    "typecheck": "tsc -b"
+    "typecheck": "tsc -b",
+    "ui:dev": "pnpm --filter @publisher/plugin build && pnpm --filter @publisher/plugin dev",
+    "validate": "pnpm typecheck && pnpm lint && pnpm test"
   },
   "devDependencies": {
+    "@adobe/cc-ext-uxp-types": "7.3.1",
     "@types/mdast": "^4.0.4",
-    "@types/node": "^24.0.0",
-    "@typescript-eslint/eslint-plugin": "^8.44.0",
-    "@typescript-eslint/parser": "^8.44.0",
-    "esbuild": "^0.25.10",
-    "eslint": "^9.36.0",
-    "fast-check": "^4.3.0",
-    "tsx": "^4.20.5",
-    "typescript": "^5.9.2",
-    "vitest": "^3.2.4"
+    "@types/node": "^26.6.2",
+    "@typescript/native": "npm:typescript@7.0.2",
+    "esbuild": "^0.28.2",
+    "eslint": "^10.11.0",
+    "fast-check": "^4.10.2",
+    "happy-dom": "20.14.5",
+    "tsx": "^4.23.15",
+    "typescript": "npm:@typescript/typescript6@6.0.2",
+    "typescript-eslint": "8.70.1",
+    "vite": "8.3.0",
+    "vitest": "^5.0.1"
   }
 }
