@@ -1,0 +1,25 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Structured Publisher</title>
+    <style>
+      body { font: 13px sans-serif; padding: 12px; color: #252525; }
+      textarea { box-sizing: border-box; width: 100%; min-height: 220px; resize: vertical; }
+      button { margin-top: 8px; }
+      pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+      .muted { color: #666; }
+    </style>
+    <script src="./dist/index.js"></script>
+  </head>
+  <body>
+    <h2>Structured Publisher</h2>
+    <p class="muted">Validate structured Markdown with the shared publishing core.</p>
+    <textarea id="article" aria-label="Article Markdown"># Sample article
+
+This paragraph will be composed by InDesign.</textarea>
+    <button id="validate" type="button">Validate article</button>
+    <pre id="result" aria-live="polite">Ready.</pre>
+  </body>
+</html>

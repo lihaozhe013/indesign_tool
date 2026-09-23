@@ -1,0 +1,25 @@
+const { app } = require("indesign");
+
+const report = {
+  probeVersion: 1,
+  hostVersion: app.version,
+  domVersion: app.scriptPreferences.version,
+  documentOpen: app.documents.length > 0,
+  checks: {}
+};
+
+if (report.documentOpen) {
+  const document = app.activeDocument;
+  report.checks = {
+    paragraphStyles: document.paragraphStyles.length,
+    characterStyles: document.characterStyles.length,
+    objectStyles: document.objectStyles.length,
+    pages: document.pages.length,
+    parentPages: document.masterSpreads.length,
+    stories: document.stories.length,
+    firstStoryOverset: document.stories.length > 0 ? document.stories.item(0).overflows : null,
+    firstPageLabel: document.pages.length > 0 ? document.pages.item(0).label : null
+  };
+}
+
+console.log(JSON.stringify(report));

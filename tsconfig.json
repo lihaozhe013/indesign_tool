@@ -1,0 +1,12 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./packages/contracts" },
+    { "path": "./packages/core" },
+    { "path": "./packages/template" },
+    { "path": "./packages/indesign" },
+    { "path": "./packages/test-support" },
+    { "path": "./packages/cli" },
+    { "path": "./packages/plugin" }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "name": "@publisher/cli",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": { "publisher": "./dist/main.js" },
+  "dependencies": {
+    "@publisher/contracts": "workspace:*",
+    "@publisher/core": "workspace:*",
+    "@publisher/template": "workspace:*"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "dev": "tsx src/main.ts"
+  }
+}
