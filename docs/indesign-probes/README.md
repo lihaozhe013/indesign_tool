@@ -8,6 +8,8 @@ The designer's report package is copied to an ignored, disposable folder under `
 
 The `Host Version Probe.idjs` and passive scanner `Structured Publisher Template Scan.idjs` are installed in this host's user Scripts Panel folder: `~/Library/Preferences/Adobe InDesign/Version 21.0-J/zh_CN/Scripts/Scripts Panel/`. InDesign 2026 on this workstation uses the `21.0-J` preferences directory, not `21.0`; discover the active location by right-clicking the User folder in the Scripts panel and choosing Reveal in Finder instead of assuming the directory name. The probe returned `uxp-9.0.3-local`. The scanner initially failed because `document.allPageItems` is indexed rather than exposing an `item()` method; the fallback is now in place. The scan completed without modifying the disposable document and its JSON passed `TemplateScan v1` validation. On this workstation, UXP logs are under `~/Library/Logs/Adobe/Adobe InDesign 2024/`, even though the installed application is InDesign 2026. Keep the report and host-version evidence in the ignored host-artifact folder; do not add designer source files, article text, images, or fonts to Git.
 
+The next probe, `paragraph-style-probe.idjs`, creates a scratch document, adds one paragraph style, applies it to one paragraph, reads the style back, and closes the scratch document without saving. Run it from the Scripts panel while the disposable report copy is open. Capture the `PUBLISHER_PARAGRAPH_STYLE_PROBE_V1` console record. The temporary document count must return to its original value; a failed cleanup is reported explicitly.
+
 ## Procedure
 
 1. Open the disposable template, never the designer's source document.
@@ -20,7 +22,8 @@ The `Host Version Probe.idjs` and passive scanner `Structured Publisher Template
 
 | Capability | Probe question | Required evidence | Status |
 | --- | --- | --- | --- |
-| Paragraph and character styles | Can existing named styles be resolved, applied, and read back? | Qualified style names before and after save/reopen | Not run |
+| Paragraph styles | Can a named style be created, applied, and read back in a scratch document? | Created/applied style names and scratch-document cleanup | Prepared; not run |
+| Character styles | Can existing named styles be resolved, applied, and read back? | Qualified style names before and after save/reopen | Not run |
 | Object styles | Can a style be applied to a placed graphic frame and read back? | Style identity and frame properties | Not run |
 | Script labels | Do namespaced keyed labels survive save/reopen and locate uniquely? | Key/value report before and after reopen | Not run |
 | Parent pages and page operations | Can a template parent be assigned and an appropriate page duplicated? | Page count, parent identity, and item placement | Not run |
@@ -38,6 +41,8 @@ The `Host Version Probe.idjs` and passive scanner `Structured Publisher Template
 
 - [Run and debug UXP scripts](https://developer.adobe.com/indesign/uxp/scripts/tutorials/tips-tricks/)
 - [Start an InDesign UXP script](https://developer.adobe.com/indesign/uxp/scripts/getting-started/)
+- [Create and apply paragraph styles](https://developer.adobe.com/indesign/uxp/resources/recipes/document-changes/)
+- [SaveOptions](https://developer.adobe.com/indesign/uxp/dom/api/s/save-options/)
 - [InDesign DOM versioning](https://developer.adobe.com/indesign/uxp/resources/fundamentals/dom-versioning/)
 - [UXP runtime versions by host release](https://developer.adobe.com/uxp/uxp-api/versions)
 - [UXP Developer Tool setup and privileges](https://developer.adobe.com/indesign/uxp/introduction/essentials/dev-tools/)
