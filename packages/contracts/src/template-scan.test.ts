@@ -33,6 +33,14 @@ describe("TemplateScan v1", () => {
     expect(validateTemplateScan(scan)).toEqual([]);
   });
 
+  it("accepts unnamed host page items", () => {
+    const unnamed: TemplateScan = {
+      ...scan,
+      frames: [{ ...scan.frames[0]!, name: "" }]
+    };
+    expect(validateTemplateScan(unnamed)).toEqual([]);
+  });
+
   it("rejects malformed bounds and repeated frame references", () => {
     const malformed: TemplateScan = {
       ...scan,

@@ -487,7 +487,7 @@ export function validateTemplateScan(value: unknown): Diagnostic[] {
   arrays.frames!.forEach((frame, index) => {
     const path = "frames." + index;
     if (!isRecord(frame) || !isNonEmptyString(frame.ref) || !Number.isInteger(frame.index)
-        || !isNonEmptyString(frame.name) || !["text", "graphic", "other"].includes(String(frame.kind))
+        || typeof frame.name !== "string" || !["text", "graphic", "other"].includes(String(frame.kind))
         || (frame.label !== undefined && typeof frame.label !== "string")
         || (frame.roleLabel !== undefined && typeof frame.roleLabel !== "string")
         || (frame.pageRef !== undefined && typeof frame.pageRef !== "string")
