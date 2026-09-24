@@ -19,7 +19,7 @@ Run `pnpm ui:dev` to open a browser preview of the designer panel. This preview 
 
 The core, contracts, template compiler, and CLI operate without InDesign. A read-only scan has run in InDesign 2026 (21.0.0.192, DOM 21.0, UXP 9.0.3) against the designer's report copy. A scratch-document probe also confirmed paragraph style creation and application in memory. Story threading, save/reopen persistence, export, and publishing remain unverified. UXP Developer Tool is absent; article publishing acceptance still needs a synthetic template.
 
-See [the implementation plan](docs/implementation-plan.md), [testing strategy](docs/testing.md), and [InDesign probe procedure](docs/indesign-probes/README.md) for architecture boundaries, current host limitations, and the path to host-backed verification.
+See [the implementation plan](docs/implementation-plan.md), [next steps](docs/next-steps.md), [testing strategy](docs/testing.md), and [InDesign probe procedure](docs/indesign-probes/README.md) for architecture boundaries, current host limitations, and the path to host-backed verification.
 
 ## Initial commands
 
