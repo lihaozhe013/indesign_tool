@@ -13,7 +13,7 @@ function read(readValue, fallback) {
 function items(collection) {
   const output = [];
   for (let index = 0; index < collection.length; index += 1) {
-    output.push(collection.item(index));
+    output.push(typeof collection.item === "function" ? collection.item(index) : collection[index]);
   }
   return output;
 }

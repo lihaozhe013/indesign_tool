@@ -1,10 +1,10 @@
 const { app } = require("indesign");
-const uxp = require("uxp");
+const { versions } = require("uxp");
 
 console.log("PUBLISHER_HOST_ENV_V1 " + JSON.stringify({
   application: "InDesign",
   hostVersion: String(app.version),
   domVersion: String(app.scriptPreferences.version),
-  uxpVersion: String(uxp.version),
+  uxpVersion: String(versions.uxp),
   openDocumentCount: app.documents.length
 }));
