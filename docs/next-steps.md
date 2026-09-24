@@ -6,35 +6,32 @@ This document is the working handoff plan from the offline publishing foundation
 
 Status checked on 2026-09-24:
 
-- The repository is on `main`, clean, at commit `71f0103`, seven commits ahead of `origin/main`.
+- The repository is on `main`, continuing from commit `a738b30`.
 - `pnpm validate` passes: type checking, lint, builds, and 47 tests.
 - InDesign 2026 is installed at `21.0.0.192`; the measured DOM version is `21.0` and UXP reports `uxp-9.0.3-local`.
-- The UXP Developer Tool is not installed. `.idjs` probes can still run from the InDesign Scripts panel.
+- The UXP Developer Tool is not installed. `.idjs` probes run either from the InDesign Scripts panel or non-interactively through `scripts/run-indesign-probe.mjs`, which uses the AppleScript `do script ... language uxpscript` channel and harvests the tagged record from the newest UXP log.
 - The read-only scan of the disposable Zijiang report copy passed `TemplateScan v1` validation. It found 20 pages, 261 stories, 893 page items, 15 paragraph styles, 20 character styles, and 9 object styles. It reported two missing-link instances for the same JPG, seven out-of-date links, one substituted font face, and no overset stories.
 - The paragraph-style scratch-document probe passed: it created and applied `Publisher Probe Body`, read it back, closed without saving, and restored the open-document count from 1 to 1.
-- The character-style probe is installed in the Scripts panel folder, but no `PUBLISHER_CHARACTER_STYLE_PROBE_V1` record was present in the latest log check. Recheck the log before asking anyone to run it.
+- The character-style scratch-document probe passed: it created and applied `Publisher Probe Emphasis`, read the applied style back, closed without saving, and restored the open-document count from 1 to 1. Two independent runs on 2026-09-24 produced the same passing record. In-memory only; save/reopen persistence is a separate probe.
 - The report is an inspection sample, not the initial publishing template. Do not force its 261 independent stories into the single main-article-story model.
 
 Host probe evidence and procedures are in [the InDesign probe guide](indesign-probes/README.md). Local host artifacts live under the ignored `artifacts/host/indesign-21.0.0.192/` directory. Do not commit the designer's `.indd`, IDML, PDF, fonts, or linked assets.
 
 ## Ordered Work Plan
 
-### 1. Finish the character-style probe
+### 1. Finish the character-style probe (done 2026-09-24)
 
-1. Search the latest InDesign UXP log for `PUBLISHER_CHARACTER_STYLE_PROBE_V1`.
-2. If absent, run **Publisher Character Style Probe** from Window > Utilities > Scripts while the disposable report copy is open.
-3. Record the complete result under the ignored host-artifact directory and update the probe matrix.
-4. Count this as a pass only if `success` is true, the created and applied names match, the scratch document closes without saving, and the open-document count is unchanged.
+The probe recorded `success: true` with matching created/applied names (`Publisher Probe Emphasis`), a scratch document closed without saving, and the open-document count restored from 1 to 1, on two independent runs. The passing record is saved in the ignored host-artifact directory and the probe matrix is updated. This verifies in-memory behavior only; it does not establish save/reopen persistence.
 
-This probe verifies in-memory behavior only. It does not establish save/reopen persistence.
+Probe execution is now automated: `scripts/run-indesign-probe.mjs` runs a `.idjs` probe via AppleScript `do script ... language uxpscript` (any POSIX path; no Scripts panel click and no UXP Developer Tool needed) and extracts the tagged JSON record from the newest UXP log.
 
 ### 2. Resolve the template-annotation mechanism
 
-Run separate probes against disposable documents:
+Run separate probes against disposable scratch documents:
 
-1. Write and read a namespaced script label on a document object in the same session.
-2. Save the scratch document, close it, reopen it, and read the same label.
-3. Test whether duplicate or renamed objects can still be resolved unambiguously.
+1. Write and read a namespaced keyed script label on document, page, text-frame, and style objects in the same session, including duplicate-label disambiguation.
+2. Save the scratch document, close it, reopen it, and read the same labels in a separate run.
+3. Test whether duplicate or renamed objects can still be resolved unambiguously by label lookup across `allPageItems`.
 4. If labels fail persistence or reliable lookup, probe a generated sidecar manifest keyed by unique template object names before selecting that fallback.
 
 Record each result and make the annotation ADR decision only after the relevant host behavior is observed. Do not change the real report source.

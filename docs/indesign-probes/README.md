@@ -8,13 +8,28 @@ The designer's report package is copied to an ignored, disposable folder under `
 
 The `Host Version Probe.idjs` and passive scanner `Structured Publisher Template Scan.idjs` are installed in this host's user Scripts Panel folder: `~/Library/Preferences/Adobe InDesign/Version 21.0-J/zh_CN/Scripts/Scripts Panel/`. InDesign 2026 on this workstation uses the `21.0-J` preferences directory, not `21.0`; discover the active location by right-clicking the User folder in the Scripts panel and choosing Reveal in Finder instead of assuming the directory name. The probe returned `uxp-9.0.3-local`. The scanner initially failed because `document.allPageItems` is indexed rather than exposing an `item()` method; the fallback is now in place. The scan completed without modifying the disposable document and its JSON passed `TemplateScan v1` validation. On this workstation, UXP logs are under `~/Library/Logs/Adobe/Adobe InDesign 2024/`, even though the installed application is InDesign 2026. Keep the report and host-version evidence in the ignored host-artifact folder; do not add designer source files, article text, images, or fonts to Git.
 
-The paragraph style probe created and applied `Publisher Probe Body`, read the applied style back, and closed its scratch document without saving. Its result was `success: true`; the open-document count returned from 1 to 1. The record is saved under the ignored host-artifact folder. The next probe creates and applies one character style in another scratch document. UXP script `console.log` records can be found in the newest `~/Library/Logs/Adobe/Adobe InDesign 2024/UXPLogs_*.log`; search for the probe's `PUBLISHER_*_V1` tag.
+The paragraph style probe created and applied `Publisher Probe Body`, read the applied style back, and closed its scratch document without saving. Its result was `success: true`; the open-document count returned from 1 to 1. The record is saved under the ignored host-artifact folder. The character style probe later created and applied `Publisher Probe Emphasis` with the same pattern and also recorded `success: true` with an unchanged document count; it passed on two independent runs on 2026-09-24. Both records live in `artifacts/host/indesign-21.0.0.192/probe-run/`. Both probes verify in-memory behavior only; style persistence across save/reopen is a separate probe.
+
+## Automated probe execution
+
+On macOS, InDesign's AppleScript dictionary exposes `do script ... language uxpscript`, which runs a UXP `.idjs` file from any POSIX path without the Scripts panel, UXP Designer Tool, or user interaction. The return value is not propagated to AppleScript; scripts run asynchronously, and `console.log` evidence still lands in the newest `~/Library/Logs/Adobe/Adobe InDesign 2024/UXPLogs_*.log` under the probe's `PUBLISHER_*_V1` tag.
+
+`scripts/run-indesign-probe.mjs` (development tooling only; not part of the product adapter) executes that channel and harvests the record:
+
+```bash
+node scripts/run-indesign-probe.mjs packages/indesign/probes/<probe>.idjs \
+  --tag PUBLISHER_<NAME>_PROBE_V1 \
+  --out artifacts/host/indesign-21.0.0.192/probe-run/<name>.json
+```
+
+This channel is for probe execution and evidence capture only. Product code must never shell out to AppleScript; persistent-panel work still requires the UXP Developer Tool, and adapter DOM access stays in `packages/indesign`.
+
 
 ## Procedure
 
 1. Open the disposable template, never the designer's source document.
 2. Run `host-version-probe.idjs` and `template-scan.idjs`. Record the application version, UXP version, DOM version, operating system, input document hash, and scan output.
-3. Run one capability probe at a time. Save each probe's input, result, and disposable output with the host-version identifier.
+3. Run one capability probe at a time, via `scripts/run-indesign-probe.mjs` or the Scripts panel. Save each probe's input, result, and disposable output with the host-version identifier.
 4. For persistence claims, save, close, reopen, and query the same objects in a separate run. In-memory success does not establish persistence.
 5. Add a host contract test only for behavior confirmed by the recorded output. A failing or unavailable API remains unsupported until an alternative is probed.
 
@@ -23,7 +38,7 @@ The paragraph style probe created and applied `Publisher Probe Body`, read the a
 | Capability | Probe question | Required evidence | Status |
 | --- | --- | --- | --- |
 | Paragraph styles | Can a named style be created, applied, and read back in a scratch document? | Created/applied style names and scratch-document cleanup | Pass in memory; persistence not run |
-| Character styles | Can a named style be created, applied, and read back in a scratch document? | Created/applied style names and scratch-document cleanup | Prepared; not run |
+| Character styles | Can a named style be created, applied, and read back in a scratch document? | Created/applied style names and scratch-document cleanup | Pass in memory; persistence not run |
 | Object styles | Can a style be applied to a placed graphic frame and read back? | Style identity and frame properties | Not run |
 | Script labels | Do namespaced keyed labels survive save/reopen and locate uniquely? | Key/value report before and after reopen | Not run |
 | Parent pages and page operations | Can a template parent be assigned and an appropriate page duplicated? | Page count, parent identity, and item placement | Not run |
