@@ -15,7 +15,7 @@ Unit tests cover parsing, schema validation, template compilation, style-role re
 
 Panel tests run in `happy-dom` without loading InDesign. They exercise validation, semantic outline rendering, diagnostics, tab state, edited/stale input, and safe text rendering using the actual panel markup. `pnpm ui:dev` provides a local browser preview for visual review. Browser appearance is not treated as proof of UXP compatibility.
 
-The shared publishing packages use the ES2020 syntax and library baseline so the same core bundle can run in the documented UXP target. The plugin type-checks against Adobe's UXP type definitions without the browser `DOM` library. A source boundary test guards against syntax/library APIs newer than that baseline.
+The TypeScript source target is ESNext with ES2020 library APIs. The UXP panel bundle is lowered to ES2020 pending a runtime contract check against the minimum supported InDesign version. The plugin type-checks against Adobe's UXP type definitions without the browser `DOM` library.
 
 The GitHub Actions offline lane installs from the frozen lockfile and runs `pnpm validate`. It does not install or require Adobe software.
 
@@ -25,9 +25,9 @@ Use `FakeHostAdapter` to test orchestration without a host. The core must react 
 
 When InDesign and UXP Developer Tool are available, run probes against disposable documents, record host/UXP/DOM versions, and save the probe reports. Verify each capability independently: paragraph and character styles, object styles, labels, parent pages, page duplication, story creation and threading, overset, anchored objects, placed graphics, fitting, text wrap, save/reopen persistence, export, font substitution, and stable object identity. Add contract tests only after a behavior has been observed on the supported host.
 
-The initial probe at `packages/indesign/probes/contract-probe.idjs` is an inventory probe only. It reports host/DOM versions and counts/labels from an already-open document. It does not mutate a template or certify any listed capability.
+`packages/indesign/probes/host-version-probe.idjs` reports host, UXP, and DOM versions. `packages/indesign/probes/template-scan.idjs` emits the versioned structural scan for an already-open disposable document. `contract-probe.idjs` is a basic count/label smoke probe. These probes do not mutate a template or certify style, threading, label persistence, export, or save/reopen behavior.
 
-The current CI workflow does not run this lane. Add a separate host lane only after a supported InDesign installation and disposable template are available.
+InDesign 2026 (21.0.0.192) is installed, but UXP Developer Tool and host probe results are not yet available. The current CI workflow does not run this lane. Add a separate host lane after disposable-template contracts are exercised and recorded.
 
 ## Canonical document dumps
 
@@ -37,4 +37,4 @@ Compare `DocumentDump v1` after sorting by document order and stable semantic re
 
 Use a synthetic template first, then a designer-provided template. Compare both planned `DocumentIR` and the canonical host dump. Export with pinned InDesign version, fonts, template revision, and export settings. Rasterize exports at a fixed resolution and compare against reviewed image baselines with a documented tolerance for antialiasing. Store failing dumps, job files, and exports as CI artifacts for diagnosis. Do not accept visual baselines generated on an unknown host/font set.
 
-No InDesign installation, real template, or approved visual baseline is present in the current environment, so host contracts and visual regression are pending. Normal CI remains useful and required without them.
+InDesign 2026 and a real designer report template are present, but UXP Developer Tool is absent and no host probe has completed. A synthetic publishing template and approved visual baseline are also pending. Host contracts and visual regression remain separate from normal CI, which remains useful and required without them.

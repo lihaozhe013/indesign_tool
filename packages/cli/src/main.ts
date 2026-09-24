@@ -2,10 +2,10 @@
 import { readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { basename, dirname, resolve } from "node:path";
-import type { CompiledTemplate, TemplateInventory } from "@publisher/contracts";
+import type { CompiledTemplate, TemplateInventory, TemplateRoleAssignments, TemplateScan } from "@publisher/contracts";
 import { stableJson, validateSemanticDocument, validateTemplateInventory } from "@publisher/contracts";
 import { parseArticle, planDocument, validateAssetReferences } from "@publisher/core";
-import { compileTemplate } from "@publisher/template";
+import { compileTemplate, createTemplateInventory } from "@publisher/template";
 
 const cliArgs = process.argv.slice(2);
 const [command, subcommand, ...args] = cliArgs[0] === "--" ? cliArgs.slice(1) : cliArgs;
@@ -16,6 +16,8 @@ if (command === "--help" || command === "help" || !command) {
   await parseCommand(args[0]);
 } else if (command === "template" && subcommand === "validate") {
   await validateTemplateCommand(args[0]);
+} else if (command === "template" && subcommand === "compile") {
+  await compileTemplateCommand(args[0], args[1]);
 } else if (command === "plan") {
   await planCommand([subcommand, ...args].filter((argument): argument is string => argument !== undefined));
 } else if (["render", "dump", "export"].includes(command) || (command === "template" && subcommand === "inspect")) {
@@ -50,6 +52,21 @@ async function validateTemplateCommand(filePath: string | undefined): Promise<vo
   const result = compileTemplate(raw as TemplateInventory);
   process.stdout.write(stableJson(result));
   if (!result.template) process.exitCode = 1;
+}
+
+async function compileTemplateCommand(scanPath: string | undefined, assignmentsPath: string | undefined): Promise<void> {
+  if (!scanPath || !assignmentsPath) return usageError("publisher template compile <scan.json> <roles.json>");
+  const [scan, assignments] = await Promise.all([readJson(scanPath), readJson(assignmentsPath)]);
+  const inventory = createTemplateInventory(scan as TemplateScan, assignments as TemplateRoleAssignments);
+  if (!inventory.inventory) {
+    process.stdout.write(stableJson({ diagnostics: inventory.diagnostics }));
+    process.exitCode = 1;
+    return;
+  }
+  const compiled = compileTemplate(inventory.inventory);
+  const diagnostics = [...inventory.diagnostics, ...compiled.diagnostics];
+  process.stdout.write(stableJson({ inventory: inventory.inventory, compiledTemplate: compiled.template, diagnostics }));
+  if (!compiled.template || diagnostics.some((item) => item.severity === "error")) process.exitCode = 1;
 }
 
 async function planCommand(args: string[]): Promise<void> {
@@ -121,6 +138,7 @@ function printHelp(): void {
     "Commands:",
     "  publisher article parse <article.md>",
     "  publisher template validate <inventory.json>",
+    "  publisher template compile <scan.json> <roles.json>",
     "  publisher plan <article.md> --template <inventory.json>",
     "  publisher template inspect <template.indd>   Requires a connected InDesign host",
     "  publisher render <article.md>                Requires a connected InDesign host",

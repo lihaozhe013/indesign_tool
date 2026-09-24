@@ -9,6 +9,8 @@ import type {
   TemplateInventory
 } from "@publisher/contracts";
 import { validateVersionedObject } from "@publisher/contracts";
+export { createTemplateInventory } from "./scan.js";
+export type { CreateTemplateInventoryResult } from "./scan.js";
 
 const requiredPages: PageRole[] = ["Cover", "Article"];
 const requiredStyles: StyleRole[] = ["ArticleTitle", "SectionHeading", "Body"];

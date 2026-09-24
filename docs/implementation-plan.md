@@ -18,7 +18,7 @@ The plugin is a designer-facing adapter and the CLI is a developer/automation ad
 | `plugin` | Designer panel and UXP-facing entry point | Calls shared core; host access through adapter |
 | `test-support` | Fake host, reusable inventories, architecture checks | Test-only |
 
-Use TypeScript 7, pnpm workspaces, project-reference type checking, ESLint boundary rules, Vitest, and fast-check. The shared publishing packages use an ES2020 syntax and library baseline, which keeps the core bundle compatible with the documented UXP target. The CLI may run on a newer Node runtime without raising the shared-core baseline. The plugin type-checks against Adobe's UXP definitions without the browser `DOM` library. TypeScript 6's compatibility package is installed under the `typescript` alias only for the current typescript-eslint parser; `tsc` remains TypeScript 7.
+Use TypeScript 7, pnpm workspaces, project-reference type checking, ESLint boundary rules, Vitest, and fast-check. TypeScript emits ESNext syntax while the declared standard-library APIs remain at ES2020. The UXP bundle is separately lowered to ES2020 until the minimum supported InDesign/UXP runtime is exercised in host contract tests. The CLI runs on the current Node line without forcing the shared packages to adopt Node APIs. The plugin type-checks against Adobe's UXP definitions without the browser `DOM` library. TypeScript 6's compatibility package is installed under the `typescript` alias only for the current typescript-eslint parser; `tsc` resolves to TypeScript 7.
 
 ## Data model
 
@@ -33,7 +33,7 @@ Use TypeScript 7, pnpm workspaces, project-reference type checking, ESLint bound
 
 The adapter port covers template inspection, rendering, document dump, export, and queued job processing. Its eventual UXP implementation should use template-provided prototype pages/parent-page items, threaded text frames, native paragraph keep options, anchored graphics, object styles, and native text composition where appropriate. Avoid selection, dialogs, active-window state, and clipboard dependencies so a later Server adapter remains possible.
 
-The current machine has no InDesign or UXP Developer Tool. The adapter is therefore a tested contract boundary plus fake implementation, not a claim of working DOM integration. When a supported host is available, run disposable-document probes one capability at a time before implementing that capability. Record InDesign, UXP, and DOM versions and the result; turn confirmed behavior into adapter contract tests. Probe save/reopen as a separate operation from in-memory behavior.
+InDesign 2026 (21.0.0.192) is installed. UXP Developer Tool is not installed, and host behaviors remain unverified until the `.idjs` probe is run against the disposable reference copy. The adapter is therefore a tested contract boundary plus fake implementation, not a claim of working DOM integration. Run disposable-document probes one capability at a time before implementing that capability. Record InDesign, UXP, and DOM versions and the result; turn confirmed behavior into adapter contract tests. Probe save/reopen as a separate operation from in-memory behavior.
 
 Desktop UXP scripts are documented for InDesign 18.0 onward and InDesign Server; persistent-panel plugins are documented for desktop InDesign 18.5 onward. UXP mounts the InDesign DOM through `require("indesign")` from 18.4 onward, and DOM/UXP API availability varies by release. Treat these as compatibility floors from Adobe documentation, not as product support claims. Review the per-version API reference and changelog before relying on a call.
 
@@ -43,7 +43,7 @@ Use UXP for host integration. Retain an ExtendScript shim only if a required DOM
 
 ## CLI and plugin
 
-Offline CLI commands parse Markdown, validate inventories, and produce plans. Host commands submit versioned jobs and return `HostUnavailable` when no runner is connected. The panel validates Markdown, shows a semantic outline and diagnostics, and uses the same core as the CLI. A Vite preview and happy-dom tests cover UI behavior without InDesign. The panel's host actions, annotation, and queue processing still require UXP implementation and host verification. UXP file selection and persistent permission behavior must be host-probed before relying on the queue transport; the queue contract itself is host-independent.
+Offline CLI commands parse Markdown, validate inventories, compile `TemplateScan` plus generated role assignments, and produce plans. Host commands submit versioned jobs and return `HostUnavailable` when no runner is connected. The panel validates Markdown, shows a semantic outline and diagnostics, and uses the same core as the CLI. A Vite preview and happy-dom tests cover UI behavior without InDesign. The panel's host actions, annotation, and queue processing still require UXP implementation and host verification. UXP file selection and persistent permission behavior must be host-probed before relying on the queue transport; the queue contract itself is host-independent.
 
 Publishing in v1 writes a new output document so earlier `.indd` files and manual edits remain intact. Partial in-place synchronization is deferred; generated-document reflow is in scope.
 

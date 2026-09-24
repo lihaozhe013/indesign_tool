@@ -115,6 +115,102 @@ export interface TemplateInventory {
   requiredAssets: string[];
 }
 
+export interface TemplateScanPage {
+  ref: string;
+  index: number;
+  name: string;
+  label?: string;
+  roleLabel?: string;
+  appliedParentPageRef?: string;
+  bounds?: [number, number, number, number];
+}
+
+export interface TemplateScanFrame {
+  ref: string;
+  index: number;
+  name: string;
+  kind: "text" | "graphic" | "other";
+  label?: string;
+  roleLabel?: string;
+  pageRef?: string;
+  parentPageRef?: string;
+  layerName?: string;
+  bounds?: [number, number, number, number];
+  storyRef?: string;
+  previousFrameRef?: string;
+  nextFrameRef?: string;
+  textLength?: number;
+  overset?: boolean;
+  wrapMode?: string;
+}
+
+export interface TemplateScanStory {
+  ref: string;
+  index: number;
+  textLength: number;
+  overset: boolean;
+  frameRefs: string[];
+}
+
+export interface TemplateScanStyle {
+  ref: string;
+  index: number;
+  kind: StyleKind;
+  name: string;
+  qualifiedName: string;
+  roleLabel?: string;
+}
+
+export interface TemplateScanAsset {
+  ref: string;
+  name: string;
+  format: string;
+  status: string;
+}
+
+export interface TemplateScanFont {
+  name: string;
+  family: string;
+  style: string;
+  status: string;
+}
+
+export interface TemplateScan {
+  schemaVersion: 1;
+  host: {
+    application: "InDesign";
+    version: string;
+    domVersion: string;
+  };
+  document: {
+    name: string;
+    modified: boolean;
+    horizontalMeasurementUnits: string;
+    verticalMeasurementUnits: string;
+    pageCount: number;
+    spreadCount: number;
+    parentPageCount: number;
+    storyCount: number;
+  };
+  pages: TemplateScanPage[];
+  parentPages: TemplateScanPage[];
+  frames: TemplateScanFrame[];
+  stories: TemplateScanStory[];
+  styles: TemplateScanStyle[];
+  assets: TemplateScanAsset[];
+  fonts: TemplateScanFont[];
+}
+
+export interface TemplateRoleAssignments {
+  schemaVersion: 1;
+  templateId: string;
+  name: string;
+  pageRoles: Array<{ ref: string; role: PageRole }>;
+  frameRoles: Array<{ ref: string; role: string }>;
+  styleRoles: Array<{ ref: string; role: StyleRole }>;
+  requiredAssets: string[];
+}
+
 export interface CompiledPageRole {
   sourcePageRef: string;
   flowFrameRef?: string;
@@ -340,6 +436,217 @@ export function validateTemplateInventory(value: unknown): Diagnostic[] {
   return diagnostics;
 }
 
+export function validateTemplateScan(value: unknown): Diagnostic[] {
+  const diagnostics = [...validateVersionedObject(value, "TemplateScan")];
+  if (!isRecord(value)) return diagnostics;
+  if (!isRecord(value.host)
+      || value.host.application !== "InDesign"
+      || !isNonEmptyString(value.host.version)
+      || !isNonEmptyString(value.host.domVersion)) {
+    diagnostics.push(schemaError("host", "TemplateScan needs InDesign host and DOM versions"));
+  }
+  const document = isRecord(value.document) ? value.document : null;
+  if (!document
+      || !isNonEmptyString(document.name)
+      || typeof document.modified !== "boolean"
+      || !isNonEmptyString(document.horizontalMeasurementUnits)
+      || !isNonEmptyString(document.verticalMeasurementUnits)
+      || !["pageCount", "spreadCount", "parentPageCount", "storyCount"].every((field) =>
+        Number.isInteger(document[field]) && Number(document[field]) >= 0)) {
+    diagnostics.push(schemaError("document", "TemplateScan document metadata is invalid"));
+  }
+  const arrayFields = ["pages", "parentPages", "frames", "stories", "styles", "assets", "fonts"];
+  const arrays: Record<string, unknown[]> = {};
+  for (const field of arrayFields) {
+    if (Array.isArray(value[field])) arrays[field] = value[field];
+    else diagnostics.push(schemaError(field, field + " must be an array"));
+  }
+  if (arrayFields.some((field) => arrays[field] === undefined)) return diagnostics;
+
+  const pageRefs = new Set<string>();
+  const parentPageRefs = new Set<string>();
+  for (const field of ["pages", "parentPages"] as const) {
+    const refs = field === "pages" ? pageRefs : parentPageRefs;
+    arrays[field]!.forEach((page, index) => {
+      const path = field + "." + index;
+      if (!isRecord(page) || !isNonEmptyString(page.ref) || !Number.isInteger(page.index)
+          || !isNonEmptyString(page.name) || (page.label !== undefined && typeof page.label !== "string")
+          || (page.roleLabel !== undefined && typeof page.roleLabel !== "string")
+          || (page.appliedParentPageRef !== undefined && typeof page.appliedParentPageRef !== "string")
+          || (page.bounds !== undefined && !isBounds(page.bounds))) {
+        diagnostics.push(schemaError(path, "Invalid scanned page"));
+      } else if (refs.has(page.ref)) {
+        diagnostics.push(schemaError(path + ".ref", "Duplicate scanned page reference"));
+      } else {
+        refs.add(page.ref);
+      }
+    });
+  }
+
+  const frameRefs = new Set<string>();
+  arrays.frames!.forEach((frame, index) => {
+    const path = "frames." + index;
+    if (!isRecord(frame) || !isNonEmptyString(frame.ref) || !Number.isInteger(frame.index)
+        || !isNonEmptyString(frame.name) || !["text", "graphic", "other"].includes(String(frame.kind))
+        || (frame.label !== undefined && typeof frame.label !== "string")
+        || (frame.roleLabel !== undefined && typeof frame.roleLabel !== "string")
+        || (frame.pageRef !== undefined && typeof frame.pageRef !== "string")
+        || (frame.parentPageRef !== undefined && typeof frame.parentPageRef !== "string")
+        || (frame.layerName !== undefined && typeof frame.layerName !== "string")
+        || (frame.bounds !== undefined && !isBounds(frame.bounds))
+        || (frame.storyRef !== undefined && typeof frame.storyRef !== "string")
+        || (frame.previousFrameRef !== undefined && typeof frame.previousFrameRef !== "string")
+        || (frame.nextFrameRef !== undefined && typeof frame.nextFrameRef !== "string")
+        || (frame.textLength !== undefined && (!Number.isInteger(frame.textLength) || Number(frame.textLength) < 0))
+        || (frame.overset !== undefined && typeof frame.overset !== "boolean")
+        || (frame.wrapMode !== undefined && typeof frame.wrapMode !== "string")) {
+      diagnostics.push(schemaError(path, "Invalid scanned frame"));
+    } else if (frameRefs.has(frame.ref)) {
+      diagnostics.push(schemaError(path + ".ref", "Duplicate scanned frame reference"));
+    } else {
+      frameRefs.add(frame.ref);
+    }
+  });
+
+  const storyRefs = new Set<string>();
+  const storyFrameRefsByRef = new Map<string, Set<string>>();
+  arrays.stories!.forEach((story, index) => {
+    if (!isRecord(story) || !isNonEmptyString(story.ref) || !Number.isInteger(story.index)
+        || !Number.isInteger(story.textLength) || Number(story.textLength) < 0
+        || typeof story.overset !== "boolean" || !Array.isArray(story.frameRefs)
+        || !story.frameRefs.every((ref) => typeof ref === "string")) {
+      diagnostics.push(schemaError("stories." + index, "Invalid scanned story"));
+    } else if (storyRefs.has(story.ref)) {
+      diagnostics.push(schemaError("stories." + index + ".ref", "Duplicate scanned story reference"));
+    } else {
+      storyRefs.add(story.ref);
+      const frameRefsForStory = story.frameRefs as string[];
+      storyFrameRefsByRef.set(story.ref, new Set(frameRefsForStory));
+      if (new Set(frameRefsForStory).size !== frameRefsForStory.length) {
+        diagnostics.push(schemaError("stories." + index + ".frameRefs", "Story frame references must be unique"));
+      }
+    }
+  });
+  const frameByRef = new Map(arrays.frames!
+    .filter((frame): frame is Record<string, unknown> => isRecord(frame) && isNonEmptyString(frame.ref))
+    .map((frame) => [String(frame.ref), frame]));
+  arrays.stories!.forEach((story, index) => {
+    if (!isRecord(story) || !Array.isArray(story.frameRefs)) return;
+    story.frameRefs.forEach((ref, frameIndex) => {
+      if (typeof ref === "string" && !frameRefs.has(ref)) {
+        diagnostics.push(schemaError("stories." + index + ".frameRefs." + frameIndex, "Story references an unknown frame"));
+      } else if (typeof ref === "string" && frameByRef.get(ref)?.storyRef !== story.ref) {
+        diagnostics.push(schemaError("stories." + index + ".frameRefs." + frameIndex, "Frame belongs to a different story"));
+      }
+    });
+  });
+  arrays.frames!.forEach((frame, index) => {
+    if (!isRecord(frame)) return;
+    if (typeof frame.pageRef === "string" && !pageRefs.has(frame.pageRef)) {
+      diagnostics.push(schemaError("frames." + index + ".pageRef", "Frame references an unknown page"));
+    }
+    if (typeof frame.parentPageRef === "string" && !parentPageRefs.has(frame.parentPageRef)) {
+      diagnostics.push(schemaError("frames." + index + ".parentPageRef", "Frame references an unknown parent page"));
+    }
+    if (typeof frame.storyRef === "string" && !storyRefs.has(frame.storyRef)) {
+      diagnostics.push(schemaError("frames." + index + ".storyRef", "Frame references an unknown story"));
+    } else if (typeof frame.storyRef === "string" && !storyFrameRefsByRef.get(frame.storyRef)?.has(String(frame.ref))) {
+      diagnostics.push(schemaError("frames." + index + ".storyRef", "Story frame list does not contain this frame"));
+    }
+    for (const field of ["previousFrameRef", "nextFrameRef"] as const) {
+      if (typeof frame[field] === "string" && !frameRefs.has(frame[field])) {
+        diagnostics.push(schemaError("frames." + index + "." + field, "Frame references an unknown text frame"));
+      }
+    }
+  });
+  arrays.pages!.forEach((page, index) => {
+    if (isRecord(page) && typeof page.appliedParentPageRef === "string" && !parentPageRefs.has(page.appliedParentPageRef)) {
+      diagnostics.push(schemaError("pages." + index + ".appliedParentPageRef", "Page references an unknown parent page"));
+    }
+  });
+  const styleRefs = new Set<string>();
+  arrays.styles!.forEach((style, index) => {
+    if (!isRecord(style) || !isNonEmptyString(style.ref) || !Number.isInteger(style.index)
+        || !["paragraph", "character", "object"].includes(String(style.kind))
+        || !isNonEmptyString(style.name) || !isNonEmptyString(style.qualifiedName)
+        || (style.roleLabel !== undefined && typeof style.roleLabel !== "string")) {
+      diagnostics.push(schemaError("styles." + index, "Invalid scanned style"));
+    } else if (styleRefs.has(style.ref)) {
+      diagnostics.push(schemaError("styles." + index + ".ref", "Duplicate scanned style reference"));
+    } else {
+      styleRefs.add(style.ref);
+    }
+  });
+  const assetRefs = new Set<string>();
+  arrays.assets!.forEach((asset, index) => {
+    if (!isRecord(asset) || !isNonEmptyString(asset.ref) || !isNonEmptyString(asset.name)
+        || !isNonEmptyString(asset.format) || !isNonEmptyString(asset.status)) {
+      diagnostics.push(schemaError("assets." + index, "Invalid scanned asset"));
+    } else if (assetRefs.has(asset.ref)) {
+      diagnostics.push(schemaError("assets." + index + ".ref", "Duplicate scanned asset reference"));
+    } else {
+      assetRefs.add(asset.ref);
+    }
+  });
+  arrays.fonts!.forEach((font, index) => {
+    if (!isRecord(font) || !isNonEmptyString(font.name) || !isNonEmptyString(font.family)
+        || !isNonEmptyString(font.style) || !isNonEmptyString(font.status)) {
+      diagnostics.push(schemaError("fonts." + index, "Invalid scanned font"));
+    }
+  });
+  if (document) {
+    const expectedCounts: Array<[string, string]> = [
+      ["pageCount", "pages"],
+      ["parentPageCount", "parentPages"],
+      ["storyCount", "stories"]
+    ];
+    for (const [countField, arrayField] of expectedCounts) {
+      if (Number.isInteger(document[countField]) && Array.isArray(value[arrayField])
+          && document[countField] !== value[arrayField].length) {
+        diagnostics.push(schemaError("document." + countField, countField + " does not match " + arrayField + " length"));
+      }
+    }
+  }
+  return diagnostics;
+}
+
+export function validateTemplateRoleAssignments(value: unknown): Diagnostic[] {
+  const diagnostics = [...validateVersionedObject(value, "TemplateRoleAssignments")];
+  if (!isRecord(value)) return diagnostics;
+  if (!isNonEmptyString(value.templateId) || !isNonEmptyString(value.name)) {
+    diagnostics.push(schemaError("templateId", "templateId and name must be non-empty strings"));
+  }
+  const fields = ["pageRoles", "frameRoles", "styleRoles", "requiredAssets"];
+  const arrays: Record<string, unknown[]> = {};
+  for (const field of fields) {
+    if (Array.isArray(value[field])) arrays[field] = value[field];
+    else diagnostics.push(schemaError(field, field + " must be an array"));
+  }
+  if (fields.some((field) => arrays[field] === undefined)) return diagnostics;
+  const seen = new Set<string>();
+  const assignmentSets: Array<[string, string[] | undefined]> = [
+    ["pageRoles", ["Cover", "Article", "Ending", "ImageFeature"]],
+    ["frameRoles", undefined],
+    ["styleRoles", ["ArticleTitle", "Subtitle", "SectionHeading", "Subheading", "Body", "Quote", "Caption", "Emphasis", "Link", "Code", "InlineImage", "HeroImage"]]
+  ];
+  for (const [field, allowedRoles] of assignmentSets) {
+    arrays[field]!.forEach((assignment, index) => {
+      if (!isRecord(assignment) || !isNonEmptyString(assignment.ref) || !isNonEmptyString(assignment.role)
+          || (allowedRoles && !allowedRoles.includes(String(assignment.role)))) {
+        diagnostics.push(schemaError(field + "." + index, "Invalid semantic role assignment"));
+      } else {
+        const key = field.slice(0, -1) + ":" + assignment.ref;
+        if (seen.has(key)) diagnostics.push(schemaError(field + "." + index + ".ref", "An object has multiple role assignments"));
+        seen.add(key);
+      }
+    });
+  }
+  arrays.requiredAssets!.forEach((asset, index) => {
+    if (!isNonEmptyString(asset)) diagnostics.push(schemaError("requiredAssets." + index, "Required asset names must be non-empty strings"));
+  });
+  return diagnostics;
+}
+
 function validateRuns(value: unknown, path: string, diagnostics: Diagnostic[]): void {
   if (!Array.isArray(value)) {
     diagnostics.push(schemaError(path, "Text content must be an array of runs"));
@@ -362,4 +669,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
+}
+
+function isBounds(value: unknown): value is [number, number, number, number] {
+  return Array.isArray(value) && value.length === 4 && value.every((coordinate) => typeof coordinate === "number" && Number.isFinite(coordinate));
 }

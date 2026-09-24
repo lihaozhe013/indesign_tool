@@ -1,0 +1,246 @@
+const inDesign = require("indesign");
+const app = inDesign.app;
+
+function read(readValue, fallback) {
+  try {
+    const value = readValue();
+    return value === undefined || value === null ? fallback : value;
+  } catch (_error) {
+    return fallback;
+  }
+}
+
+function items(collection) {
+  const output = [];
+  for (let index = 0; index < collection.length; index += 1) {
+    output.push(collection.item(index));
+  }
+  return output;
+}
+
+function objectRef(prefix, object) {
+  const id = read(function () { return object.id; }, null);
+  return id === null ? null : prefix + String(id);
+}
+
+function label(object) {
+  const value = read(function () { return object.label; }, "");
+  return value ? String(value) : undefined;
+}
+
+function roleLabel(object) {
+  const value = read(function () { return object.extractLabel("com.openai.structured-publisher.role"); }, "");
+  return value ? String(value) : undefined;
+}
+
+function bounds(object) {
+  const value = read(function () { return object.geometricBounds; }, null);
+  if (!value || value.length !== 4) return undefined;
+  const result = [];
+  for (let index = 0; index < 4; index += 1) {
+    const coordinate = Number(value[index]);
+    if (!isFinite(coordinate)) return undefined;
+    result.push(coordinate);
+  }
+  return result;
+}
+
+function enumName(group, value) {
+  if (!group) return String(value);
+  const keys = Object.keys(group);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index];
+    if (group[key] === value) return key;
+  }
+  return String(value);
+}
+
+function qualifiedStyleName(style, document) {
+  const names = [String(read(function () { return style.name; }, ""))];
+  let parent = read(function () { return style.parent; }, null);
+  let depth = 0;
+  while (parent && depth < 8) {
+    const parentName = String(read(function () { return parent.name; }, ""));
+    const parentId = read(function () { return parent.id; }, null);
+    if (!parentName || parentId === document.id || parentName === document.name || parentName.indexOf("$ID/") === 0) break;
+    names.unshift(parentName);
+    parent = read(function () { return parent.parent; }, null);
+    depth += 1;
+  }
+  return names.join(" / ");
+}
+
+function styleRecords(collection, kind, document) {
+  return items(collection).map(function (style, index) {
+    const record = {
+      ref: objectRef("style:", style),
+      index: index,
+      kind: kind,
+      name: String(read(function () { return style.name; }, "")),
+      qualifiedName: qualifiedStyleName(style, document)
+    };
+    const semanticRole = roleLabel(style);
+    if (semanticRole) record.roleLabel = semanticRole;
+    return record;
+  });
+}
+
+function pageRecords(collection, prefix) {
+  return items(collection).map(function (page, index) {
+    const record = {
+      ref: objectRef(prefix, page),
+      index: index,
+      name: String(read(function () { return page.name; }, String(index + 1)))
+    };
+    const objectLabel = label(page);
+    const semanticRole = roleLabel(page);
+    const pageBounds = bounds(page);
+    const appliedMaster = read(function () { return page.appliedMaster; }, null);
+    const appliedMasterRef = appliedMaster ? objectRef("parent:", appliedMaster) : null;
+    if (objectLabel) record.label = objectLabel;
+    if (semanticRole) record.roleLabel = semanticRole;
+    if (appliedMasterRef) record.appliedParentPageRef = appliedMasterRef;
+    if (pageBounds) record.bounds = pageBounds;
+    return record;
+  });
+}
+
+function frameKind(pageItem, textFrameIds) {
+  if (textFrameIds[String(pageItem.id)]) return "text";
+  const graphics = read(function () { return pageItem.allGraphics.length; }, 0);
+  return graphics > 0 ? "graphic" : "other";
+}
+
+function frameRecords(document, pageRefs, parentPageRefs) {
+  const textFrames = items(document.textFrames);
+  const textFrameIds = {};
+  const storiesByRef = {};
+  textFrames.forEach(function (textFrame) {
+    textFrameIds[String(textFrame.id)] = true;
+    const storyRef = objectRef("story:", read(function () { return textFrame.parentStory; }, null));
+    if (storyRef) storiesByRef[storyRef] = (storiesByRef[storyRef] || []).concat([objectRef("frame:", textFrame)]);
+  });
+  const pageItems = items(document.allPageItems);
+  const frames = pageItems.map(function (pageItem, index) {
+    const record = {
+      ref: objectRef("frame:", pageItem),
+      index: index,
+      name: String(read(function () { return pageItem.name; }, "")),
+      kind: frameKind(pageItem, textFrameIds)
+    };
+    const objectLabel = label(pageItem);
+    const semanticRole = roleLabel(pageItem);
+    const parentPage = read(function () { return pageItem.parentPage; }, null);
+    const parentPageRef = parentPage ? objectRef("page:", parentPage) : null;
+    const parent = read(function () { return pageItem.parent; }, null);
+    const parentRef = parent ? objectRef("parent:", parent) : null;
+    const pageBounds = bounds(pageItem);
+    const layerName = read(function () { return pageItem.itemLayer.name; }, "");
+    const story = record.kind === "text" ? read(function () { return pageItem.parentStory; }, null) : null;
+    const storyRef = story ? objectRef("story:", story) : null;
+    const previousFrame = record.kind === "text" ? read(function () { return pageItem.previousTextFrame; }, null) : null;
+    const nextFrame = record.kind === "text" ? read(function () { return pageItem.nextTextFrame; }, null) : null;
+    const textLength = story ? read(function () { return story.characters.length; }, undefined) : undefined;
+    const overset = story ? read(function () { return story.overflows; }, undefined) : undefined;
+    const wrapMode = read(function () { return pageItem.textWrapPreferences.textWrapMode; }, undefined);
+    if (objectLabel) record.label = objectLabel;
+    if (semanticRole) record.roleLabel = semanticRole;
+    if (parentPageRef && pageRefs[parentPageRef]) record.pageRef = parentPageRef;
+    if (parentRef && parentPageRefs[parentRef]) record.parentPageRef = parentRef;
+    if (layerName) record.layerName = String(layerName);
+    if (pageBounds) record.bounds = pageBounds;
+    if (storyRef) record.storyRef = storyRef;
+    if (previousFrame && read(function () { return previousFrame.id; }, null) !== null) record.previousFrameRef = objectRef("frame:", previousFrame);
+    if (nextFrame && read(function () { return nextFrame.id; }, null) !== null) record.nextFrameRef = objectRef("frame:", nextFrame);
+    if (typeof textLength === "number") record.textLength = textLength;
+    if (typeof overset === "boolean") record.overset = overset;
+    if (wrapMode !== undefined) record.wrapMode = String(wrapMode);
+    return record;
+  }).filter(function (record) { return record.ref !== null; });
+  return { frames: frames, storiesByRef: storiesByRef };
+}
+
+function storyRecords(document, storiesByRef) {
+  return items(document.stories).map(function (story, index) {
+    const storyRef = objectRef("story:", story);
+    return {
+      ref: storyRef,
+      index: index,
+      textLength: read(function () { return story.characters.length; }, 0),
+      overset: Boolean(read(function () { return story.overflows; }, false)),
+      frameRefs: (storiesByRef[storyRef] || []).filter(Boolean)
+    };
+  }).filter(function (record) { return record.ref !== null; });
+}
+
+function linkRecords(document, linkStatuses) {
+  return items(document.links).map(function (link) {
+    const name = String(read(function () { return link.name; }, ""));
+    const linkType = String(read(function () { return link.linkType; }, "unknown"));
+    return {
+      ref: objectRef("asset:", link),
+      name: name,
+      format: linkType,
+      status: enumName(linkStatuses, read(function () { return link.status; }, "UNKNOWN"))
+    };
+  }).filter(function (record) { return record.ref !== null; });
+}
+
+function fontRecords(document, fontStatuses) {
+  return items(document.fonts).map(function (font) {
+    return {
+      name: String(read(function () { return font.name; }, "Unknown")),
+      family: String(read(function () { return font.fontFamily; }, "Unknown")),
+      style: String(read(function () { return font.fontStyleName; }, "Unknown")),
+      status: enumName(fontStatuses, read(function () { return font.status; }, "UNKNOWN"))
+    };
+  });
+}
+
+function run() {
+  if (app.documents.length === 0) throw new Error("Open the disposable InDesign document before running this probe.");
+  const document = app.activeDocument;
+  const pages = pageRecords(document.pages, "page:");
+  const parentPages = pageRecords(document.masterSpreads, "parent:");
+  const pageRefs = {};
+  const parentPageRefs = {};
+  pages.forEach(function (page) { pageRefs[page.ref] = true; });
+  parentPages.forEach(function (page) { parentPageRefs[page.ref] = true; });
+  const frameResult = frameRecords(document, pageRefs, parentPageRefs);
+  const scan = {
+    schemaVersion: 1,
+    host: {
+      application: "InDesign",
+      version: String(app.version),
+      domVersion: String(app.scriptPreferences.version)
+    },
+    document: {
+      name: String(document.name),
+      modified: Boolean(document.modified),
+      horizontalMeasurementUnits: String(read(function () { return document.viewPreferences.horizontalMeasurementUnits; }, "UNKNOWN")),
+      verticalMeasurementUnits: String(read(function () { return document.viewPreferences.verticalMeasurementUnits; }, "UNKNOWN")),
+      pageCount: document.pages.length,
+      spreadCount: document.spreads.length,
+      parentPageCount: document.masterSpreads.length,
+      storyCount: document.stories.length
+    },
+    pages: pages,
+    parentPages: parentPages,
+    frames: frameResult.frames,
+    stories: storyRecords(document, frameResult.storiesByRef),
+    styles: [
+      ...styleRecords(document.allParagraphStyles, "paragraph", document),
+      ...styleRecords(document.allCharacterStyles, "character", document),
+      ...styleRecords(document.allObjectStyles, "object", document)
+    ],
+    assets: linkRecords(document, inDesign.LinkStatus),
+    fonts: fontRecords(document, inDesign.FontStatus)
+  };
+  console.log("PUBLISHER_TEMPLATE_SCAN_V1 " + JSON.stringify(scan));
+}
+
+try {
+  run();
+} catch (error) {
+  console.error("PUBLISHER_TEMPLATE_SCAN_ERROR " + String(error && error.stack ? error.stack : error));
+}

@@ -17,7 +17,7 @@ pnpm validate
 
 Run `pnpm ui:dev` to open a browser preview of the designer panel. This preview verifies the panel UI and shared article parser; it does not emulate InDesign's document APIs.
 
-The core, contracts, template compiler, and CLI operate without InDesign. Host rendering requires the UXP plugin runner and a supported InDesign installation. InDesign-specific behavior has not yet been contract-tested on this machine.
+The core, contracts, template compiler, and CLI operate without InDesign. InDesign 2026 (21.0.0.192) is installed, but UXP Developer Tool is absent and InDesign-specific behavior has not yet been contract-tested on this machine. The report package is used only as an inspection sample; article publishing acceptance still needs a synthetic template.
 
 See [the implementation plan](docs/implementation-plan.md), [testing strategy](docs/testing.md), and [InDesign probe procedure](docs/indesign-probes/README.md) for architecture boundaries, current host limitations, and the path to host-backed verification.
 
@@ -26,7 +26,10 @@ See [the implementation plan](docs/implementation-plan.md), [testing strategy](d
 ```bash
 publisher article parse fixtures/articles/basic.md
 publisher template validate fixtures/templates/editorial-blue.json
+pnpm dev template compile <scan.json> <roles.json>
 publisher plan fixtures/articles/basic.md --template fixtures/templates/editorial-blue.json
 ```
+
+`template compile` is an offline developer command for checking a versioned `TemplateScan` and generated role assignments. The designer-facing panel will create those assignments without requiring designers to edit JSON.
 
 Use `publisher --help` for the current command list.

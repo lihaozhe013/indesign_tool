@@ -26,14 +26,19 @@ describe("package architecture", () => {
     for (const source of sources) expect(source).not.toMatch(/(?:from\s*|require\s*\()(["'])indesign\1/);
   });
 
-  it("keeps source and the UXP bundle within the ES2020 runtime API baseline", async () => {
+  it("keeps runtime APIs within the declared library while compiling TypeScript to ESNext", async () => {
     const packageSources = await Promise.all(["contracts", "core", "template", "plugin"]
       .map((name) => collect(resolve(root, "packages", name, "src"))));
     const files = packageSources.flat();
     const sources = await Promise.all(files.map((file) => readFile(file, "utf8")));
     const bundle = await readFile(resolve(root, "packages/plugin/dist/index.js"), "utf8");
+    const tsconfig = JSON.parse(await readFile(resolve(root, "tsconfig.base.json"), "utf8")) as {
+      compilerOptions: { target?: string; lib?: string[] };
+    };
     const unsupportedRuntimeApi = /\.(?:at|toSorted|toReversed|findLast|findLastIndex|replaceAll)\s*\(/;
 
+    expect(tsconfig.compilerOptions.target).toBe("ESNext");
+    expect(tsconfig.compilerOptions.lib).toEqual(["ES2020"]);
     for (const source of sources) expect(source).not.toMatch(unsupportedRuntimeApi);
     expect(bundle).not.toMatch(unsupportedRuntimeApi);
   });
