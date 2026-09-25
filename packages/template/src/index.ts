@@ -11,6 +11,8 @@ import type {
 import { validateVersionedObject } from "@publisher/contracts";
 export { createTemplateInventory } from "./scan.js";
 export type { CreateTemplateInventoryResult } from "./scan.js";
+export { deriveRoleAssignments } from "./roles.js";
+export type { DeriveRoleAssignmentsOptions, DeriveRoleAssignmentsResult } from "./roles.js";
 
 const requiredPages: PageRole[] = ["Cover", "Article"];
 const requiredStyles: StyleRole[] = ["ArticleTitle", "SectionHeading", "Body"];

@@ -5,7 +5,7 @@ import { basename, dirname, resolve } from "node:path";
 import type { CompiledTemplate, TemplateInventory, TemplateRoleAssignments, TemplateScan } from "@publisher/contracts";
 import { stableJson, validateSemanticDocument, validateTemplateInventory } from "@publisher/contracts";
 import { parseArticle, planDocument, validateAssetReferences } from "@publisher/core";
-import { compileTemplate, createTemplateInventory } from "@publisher/template";
+import { compileTemplate, createTemplateInventory, deriveRoleAssignments } from "@publisher/template";
 
 const cliArgs = process.argv.slice(2);
 const [command, subcommand, ...args] = cliArgs[0] === "--" ? cliArgs.slice(1) : cliArgs;
@@ -55,9 +55,18 @@ async function validateTemplateCommand(filePath: string | undefined): Promise<vo
 }
 
 async function compileTemplateCommand(scanPath: string | undefined, assignmentsPath: string | undefined): Promise<void> {
-  if (!scanPath || !assignmentsPath) return usageError("publisher template compile <scan.json> <roles.json>");
-  const [scan, assignments] = await Promise.all([readJson(scanPath), readJson(assignmentsPath)]);
-  const inventory = createTemplateInventory(scan as TemplateScan, assignments as TemplateRoleAssignments);
+  if (!scanPath) return usageError("publisher template compile <scan.json> [roles.json]");
+  const scan = (await readJson(scanPath)) as TemplateScan;
+  // Roles come from designer labels unless an explicit assignments file is
+  // supplied, so the compiled manifest is generated rather than hand-authored.
+  const assignments = assignmentsPath
+    ? (await readJson(assignmentsPath)) as TemplateRoleAssignments
+    : deriveAssignmentsFromScan(scan, scanPath);
+  if (!assignments) {
+    process.exitCode = 1;
+    return;
+  }
+  const inventory = createTemplateInventory(scan, assignments);
   if (!inventory.inventory) {
     process.stdout.write(stableJson({ diagnostics: inventory.diagnostics }));
     process.exitCode = 1;
@@ -67,6 +76,18 @@ async function compileTemplateCommand(scanPath: string | undefined, assignmentsP
   const diagnostics = [...inventory.diagnostics, ...compiled.diagnostics];
   process.stdout.write(stableJson({ inventory: inventory.inventory, compiledTemplate: compiled.template, diagnostics }));
   if (!compiled.template || diagnostics.some((item) => item.severity === "error")) process.exitCode = 1;
+}
+
+function deriveAssignmentsFromScan(scan: TemplateScan, scanPath: string): TemplateRoleAssignments | undefined {
+  const templateName = typeof scan.document?.name === "string" && scan.document.name
+    ? scan.document.name
+    : basename(scanPath);
+  const derived = deriveRoleAssignments(scan, { templateId: templateName, name: templateName });
+  if (!derived.assignments) {
+    process.stdout.write(stableJson({ diagnostics: derived.diagnostics }));
+    return undefined;
+  }
+  return derived.assignments;
 }
 
 async function planCommand(args: string[]): Promise<void> {
@@ -138,7 +159,7 @@ function printHelp(): void {
     "Commands:",
     "  publisher article parse <article.md>",
     "  publisher template validate <inventory.json>",
-    "  publisher template compile <scan.json> <roles.json>",
+    "  publisher template compile <scan.json> [roles.json]",
     "  publisher plan <article.md> --template <inventory.json>",
     "  publisher template inspect <template.indd>   Requires a connected InDesign host",
     "  publisher render <article.md>                Requires a connected InDesign host",
