@@ -1,6 +1,21 @@
 const inDesign = require("indesign");
 const app = inDesign.app;
 
+// Empty scans the active document (for example the disposable designer report
+// copy). Set to a disposable document path to open it, scan it, and close it
+// without saving; the synthetic publishing fixture is the default target so
+// the template -> scan -> compile path is reproducible.
+const SCAN_TARGET_FILE = "/Users/lihaozhe/dev/indesign_tool/artifacts/host/indesign-21.0.0.192/templates/synthetic-cover-article.indd";
+
+async function scanTargetFile(path) {
+  const document = await Promise.resolve(app.open(path, true));
+  try {
+    run(document);
+  } finally {
+    await Promise.resolve(document.close(inDesign.SaveOptions.NO));
+  }
+}
+
 function read(readValue, fallback) {
   try {
     const value = readValue();
@@ -108,7 +123,12 @@ function pageRecords(collection, prefix) {
 function frameKind(pageItem, textFrameIds) {
   if (textFrameIds[String(pageItem.id)]) return "text";
   const graphics = read(function () { return pageItem.allGraphics.length; }, 0);
-  return graphics > 0 ? "graphic" : "other";
+  if (graphics > 0) return "graphic";
+  // Empty template placeholders must be role-annotatable, so graphic-capable
+  // shapes count as graphic frames even before a graphic is placed in them.
+  const typeName = String(read(function () { return pageItem.constructor.name; }, ""));
+  if (typeName === "Rectangle" || typeName === "Oval" || typeName === "Polygon") return "graphic";
+  return "other";
 }
 
 function frameRecords(document, pageRefs, parentPageRefs) {
@@ -197,9 +217,7 @@ function fontRecords(document, fontStatuses) {
   });
 }
 
-function run() {
-  if (app.documents.length === 0) throw new Error("Open the disposable InDesign document before running this probe.");
-  const document = app.activeDocument;
+function run(document) {
   const pages = pageRecords(document.pages, "page:");
   const parentPages = pageRecords(document.masterSpreads, "parent:");
   const pageRefs = {};
@@ -240,7 +258,14 @@ function run() {
 }
 
 try {
-  run();
+  if (SCAN_TARGET_FILE) {
+    scanTargetFile(SCAN_TARGET_FILE).catch(function (error) {
+      console.log("PUBLISHER_TEMPLATE_SCAN_ERROR " + String(error && error.stack ? error.stack : error));
+    });
+  } else {
+    if (app.documents.length === 0) throw new Error("Open the disposable InDesign document before running this probe.");
+    run(app.activeDocument);
+  }
 } catch (error) {
-  console.error("PUBLISHER_TEMPLATE_SCAN_ERROR " + String(error && error.stack ? error.stack : error));
+  console.log("PUBLISHER_TEMPLATE_SCAN_ERROR " + String(error && error.stack ? error.stack : error));
 }

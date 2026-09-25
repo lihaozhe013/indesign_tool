@@ -1,0 +1,209 @@
+const { app, SaveOptions } = require("indesign");
+const inDesign = require("indesign");
+
+// Generates the synthetic Cover/Article host fixture used by the publishing
+// path: named paragraph/character/object styles, role-labeled frames, a Cover
+// page, and an Article page bound to a parent spread that carries the article
+// flow frame. The output is disposable host material under the ignored
+// artifacts directory; the generator, not the .indd, is the versioned source.
+const ROLE_KEY = "com.publisher.role";
+const TEMPLATE_PATH = "/Users/lihaozhe/dev/indesign_tool/artifacts/host/indesign-21.0.0.192/templates/synthetic-cover-article.indd";
+
+const PARAGRAPH_STYLES = [
+  { name: "Article / H1", role: "style-h1" },
+  { name: "Article / H2", role: "style-h2" },
+  { name: "Article / Body", role: "style-body" },
+  { name: "Article / Quote", role: "style-quote" },
+  { name: "Article / Caption", role: "style-caption" }
+];
+const CHARACTER_STYLES = [{ name: "Article / Emphasis", role: "style-emphasis" }];
+const OBJECT_STYLES = [{ name: "Article / ImageFrame", role: "style-image-frame" }];
+
+function read(readValue, fallback) {
+  try {
+    const value = readValue();
+    return value === undefined || value === null ? fallback : value;
+  } catch (_error) {
+    return fallback;
+  }
+}
+
+function items(collection) {
+  const output = [];
+  for (let index = 0; index < collection.length; index += 1) {
+    output.push(typeof collection.item === "function" ? collection.item(index) : collection[index]);
+  }
+  return output;
+}
+
+async function settled(value) {
+  return value && typeof value.then === "function" ? await value : value;
+}
+
+const result = {
+  probeVersion: 3,
+  capability: "synthetic-cover-article-template",
+  hostVersion: String(app.version),
+  domVersion: String(app.scriptPreferences.version),
+  openDocumentCountBefore: app.documents.length,
+  templatePath: TEMPLATE_PATH,
+  success: false
+};
+
+(async function main() {
+  let scratchDocument;
+  try {
+    scratchDocument = await settled(app.documents.add());
+    scratchDocument.documentPreferences.pageWidth = 210;
+    scratchDocument.documentPreferences.pageHeight = 297;
+
+    const articleMaster = scratchDocument.masterSpreads.item(0);
+    // Document page 2 is the left page of a facing spread, so the parent
+    // frames are placed on the spread's left page using that page's own
+    // bounds (negative x) rather than assumed page-relative coordinates.
+    const articleMasterPage = articleMaster.pages.item(0);
+    const masterBounds = read(function () { return articleMasterPage.bounds; }, [0, 0, 297, 210]);
+    const flowFrame = articleMasterPage.textFrames.add({
+      geometricBounds: [masterBounds[0] + 30, masterBounds[1] + 15, masterBounds[2] - 40, masterBounds[3] - 15]
+    });
+    flowFrame.insertLabel(ROLE_KEY, "article-flow");
+    const pageNumberFrame = articleMasterPage.textFrames.add({
+      geometricBounds: [masterBounds[2] - 20, masterBounds[1] + 15, masterBounds[2] - 8, masterBounds[1] - 45],
+      contents: "0"
+    });
+    pageNumberFrame.insertLabel(ROLE_KEY, "page-number");
+    result.masterPageIds = items(articleMaster.pages).map(function (page) {
+      return read(function () { return page.id; }, null);
+    });
+    result.flowFrameParentPageId = read(function () { return flowFrame.parentPage.id; }, null);
+
+    let coverMaster = null;
+    let coverImplementation = "page";
+    try {
+      coverMaster = scratchDocument.masterSpreads.add({ namePrefix: "Cover", pageCount: 1 });
+      coverImplementation = "parent";
+    } catch (error) {
+      result.coverMasterError = String(error && error.message ? error.message : error);
+    }
+
+    const coverPage = scratchDocument.pages.item(0);
+    let coverDetached = null;
+    try {
+      coverPage.appliedMaster = inDesign.NothingEnum.NOTHING;
+      coverDetached = true;
+    } catch (error) {
+      try {
+        coverPage.appliedMaster = null;
+        coverDetached = true;
+      } catch (secondError) {
+        coverDetached = false;
+        result.coverDetachError = String(error && error.message ? error.message : error);
+      }
+    }
+    result.coverDetachedFromMaster = coverDetached;
+    const coverHost = coverMaster ? coverMaster.pages.item(coverMaster.pages.length - 1) : coverPage;
+    if (coverMaster) coverPage.appliedMaster = coverMaster;
+    const coverBounds = read(function () { return coverHost.bounds; }, [0, 0, 297, 210]);
+    const heroTitle = coverHost.textFrames.add({
+      geometricBounds: [coverBounds[0] + 90, coverBounds[1] + 20, coverBounds[0] + 160, coverBounds[3] - 20]
+    });
+    heroTitle.insertLabel(ROLE_KEY, "hero-title");
+    const heroImage = coverHost.rectangles.add({
+      geometricBounds: [coverBounds[0] + 20, coverBounds[1] + 20, coverBounds[0] + 80, coverBounds[3] - 20]
+    });
+    heroImage.insertLabel(ROLE_KEY, "hero-image");
+    coverPage.insertLabel(ROLE_KEY, "page-cover");
+
+    const articlePage = scratchDocument.pages.add();
+    articlePage.appliedMaster = articleMaster;
+    articlePage.insertLabel(ROLE_KEY, "page-article");
+
+    for (const definition of PARAGRAPH_STYLES) {
+      const style = scratchDocument.paragraphStyles.add({ name: definition.name });
+      style.insertLabel(ROLE_KEY, definition.role);
+    }
+    for (const definition of CHARACTER_STYLES) {
+      const style = scratchDocument.characterStyles.add({ name: definition.name });
+      style.insertLabel(ROLE_KEY, definition.role);
+    }
+    for (const definition of OBJECT_STYLES) {
+      const style = scratchDocument.objectStyles.add({ name: definition.name });
+      style.insertLabel(ROLE_KEY, definition.role);
+    }
+
+    const roleLabels = [];
+    for (const item of items(scratchDocument.allPageItems)) {
+      const role = String(read(function () { return item.extractLabel(ROLE_KEY); }, ""));
+      if (role) roleLabels.push({ role: role, kind: String(read(function () { return item.constructor.name; }, "")) });
+    }
+    for (const page of items(scratchDocument.pages)) {
+      const role = String(read(function () { return page.extractLabel(ROLE_KEY); }, ""));
+      if (role) roleLabels.push({ role: role, kind: "Page" });
+    }
+    for (const spread of items(scratchDocument.masterSpreads)) {
+      for (const page of items(spread.pages)) {
+        const role = String(read(function () { return page.extractLabel(ROLE_KEY); }, ""));
+        if (role) roleLabels.push({ role: role, kind: "MasterPage" });
+      }
+    }
+    for (const style of items(scratchDocument.allParagraphStyles)) {
+      const role = String(read(function () { return style.extractLabel(ROLE_KEY); }, ""));
+      if (role) roleLabels.push({ role: role, kind: "ParagraphStyle" });
+    }
+    for (const style of items(scratchDocument.allCharacterStyles)) {
+      const role = String(read(function () { return style.extractLabel(ROLE_KEY); }, ""));
+      if (role) roleLabels.push({ role: role, kind: "CharacterStyle" });
+    }
+    for (const style of items(scratchDocument.allObjectStyles)) {
+      const role = String(read(function () { return style.extractLabel(ROLE_KEY); }, ""));
+      if (role) roleLabels.push({ role: role, kind: "ObjectStyle" });
+    }
+    result.summary = {
+      pageCount: scratchDocument.pages.length,
+      masterSpreadCount: scratchDocument.masterSpreads.length,
+      coverImplementation: coverImplementation,
+      pageWidth: read(function () { return scratchDocument.documentPreferences.pageWidth; }, null),
+      pageHeight: read(function () { return scratchDocument.documentPreferences.pageHeight; }, null),
+      paragraphStyleNames: items(scratchDocument.allParagraphStyles).map(function (style) {
+        return String(read(function () { return style.name; }, ""));
+      }),
+      roleLabels: roleLabels
+    };
+
+    await settled(scratchDocument.save(TEMPLATE_PATH));
+    result.savedName = String(read(function () { return scratchDocument.name; }, ""));
+
+    const requiredRoles = ["article-flow", "page-number", "hero-title", "hero-image", "page-cover", "page-article",
+      "style-h1", "style-h2", "style-body", "style-quote", "style-caption", "style-emphasis", "style-image-frame"];
+    const foundRoles = roleLabels.map(function (entry) { return entry.role; });
+    result.missingRoles = requiredRoles.filter(function (role) { return foundRoles.indexOf(role) < 0; });
+    result.checks = {
+      twoPages: result.summary.pageCount === 2,
+      portraitPage: Math.abs(Number(result.summary.pageWidth) - 210) < 0.5
+        && Math.abs(Number(result.summary.pageHeight) - 297) < 0.5,
+      allRolesPresent: result.missingRoles.length === 0
+    };
+    result.success = Object.keys(result.checks).every(function (key) { return result.checks[key] === true; });
+  } catch (error) {
+    result.error = String(error && error.stack ? error.stack : error);
+  } finally {
+    if (scratchDocument) {
+      try {
+        await settled(scratchDocument.close(SaveOptions.NO));
+        result.scratchDocumentClosed = true;
+      } catch (error) {
+        result.scratchDocumentClosed = false;
+        result.closeError = String(error && error.stack ? error.stack : error);
+      }
+    } else {
+      result.scratchDocumentClosed = false;
+    }
+    result.openDocumentCountImmediate = app.documents.length;
+    result.countResiduePossible = result.openDocumentCountImmediate !== result.openDocumentCountBefore;
+    result.success = result.success
+      && result.scratchDocumentClosed
+      && (result.openDocumentCountImmediate === result.openDocumentCountBefore
+        || result.openDocumentCountImmediate === result.openDocumentCountBefore + 1);
+    console.log("PUBLISHER_SYNTHETIC_TEMPLATE_PROBE_V3 " + JSON.stringify(result));
+  }
+})();

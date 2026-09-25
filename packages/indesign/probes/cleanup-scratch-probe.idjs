@@ -2,7 +2,7 @@ const { app, SaveOptions } = require("indesign");
 
 // Closes leaked scratch documents left open by a hung probe run. Only ever
 // touches documents whose name is in the scratch allowlist.
-const SCRATCH_NAMES = ["scratch-labels.indd", "scratch-structure.indd"];
+const SCRATCH_NAMES = ["scratch-labels.indd", "scratch-structure.indd", "synthetic-cover-article.indd"];
 
 function read(readValue, fallback) {
   try {
