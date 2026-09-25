@@ -10,9 +10,18 @@ The `Host Version Probe.idjs` and passive scanner `Structured Publisher Template
 
 The paragraph style probe created and applied `Publisher Probe Body`, read the applied style back, and closed its scratch document without saving. Its result was `success: true`; the open-document count returned from 1 to 1. The record is saved under the ignored host-artifact folder. The character style probe later created and applied `Publisher Probe Emphasis` with the same pattern and also recorded `success: true` with an unchanged document count; it passed on two independent runs on 2026-09-24. Both records live in `artifacts/host/indesign-21.0.0.192/probe-run/`. Both probes verify in-memory behavior only; style persistence across save/reopen is a separate probe.
 
+The script-label probes settled the annotation mechanism (ADR 0003). In-memory: `insertLabel`/`extractLabel` under the key `com.publisher.role` round-trip on document, page, text frame, and paragraph/character/object style objects; an unset key reads `""`; a second key on the same object is isolated; a display `label` property also round-trips; unique and duplicate label values are resolvable by scan. Persistence: a labeled scratch document saved by string path, closed, and reopened in separate runs — all labels, including style labels, read back correctly and lookups return the same results. `label-reopen-probe` attempt 1 failed only because it used the nonexistent `getByName` (correct UXP lookup is `itemByName`); attempt 2 was invalidated because a leaked still-open document satisfied reads from memory, so later versions refuse to read a target that is already open. `Page.id` (242) and `PageItem.id` (271/294/317) were stable across save/reopen while `Document.id` changed every session, confirming identity must come from labels/names. The scanner `template-scan.idjs` now reads the same final key. All records are in the probe-run artifact folder.
+
+## Host API hazards observed
+
+- `Document.fullName` returns a Promise that never settles from a Scripts Panel/`do script` execution. Reading it without awaiting produced `"[object Promise]"`; awaiting it hung the script with no record and a leaked open document. Probes and the adapter must use synchronous `Document.name` or verify files from the shell side.
+- Collection lookup is `itemByName`; `getByName` does not exist and surfaced as silently empty label reads.
+- A hung async probe leaks its scratch document and corrupts later runs' document-count guards and reopen evidence. `cleanup-scratch-probe.idjs` closes allowlisted scratch documents, and `run-indesign-probe.mjs --cleanup <path>` removes stale targets before reruns; the reopen probe refuses an already-open target.
+- In one save run with a leaked zombie document present, `openDocumentCountAfter` read 2 immediately after a successful save+close; with a clean environment the count guard held. Treat cross-run environment checks (no stray documents, no stale target file) as part of probe hygiene.
+
 ## Automated probe execution
 
-On macOS, InDesign's AppleScript dictionary exposes `do script ... language uxpscript`, which runs a UXP `.idjs` file from any POSIX path without the Scripts panel, UXP Designer Tool, or user interaction. The return value is not propagated to AppleScript; scripts run asynchronously, and `console.log` evidence still lands in the newest `~/Library/Logs/Adobe/Adobe InDesign 2024/UXPLogs_*.log` under the probe's `PUBLISHER_*_V1` tag.
+On macOS, InDesign's AppleScript dictionary exposes `do script ... language uxpscript`, which runs a UXP `.idjs` file from any POSIX path without the Scripts panel, UXP Developer Tool, or user interaction. The return value is not propagated to AppleScript; scripts run asynchronously, and `console.log` evidence still lands in the newest `~/Library/Logs/Adobe/Adobe InDesign 2024/UXPLogs_*.log` under the probe's `PUBLISHER_*_V*` tag.
 
 `scripts/run-indesign-probe.mjs` (development tooling only; not part of the product adapter) executes that channel and harvests the record:
 
@@ -40,7 +49,7 @@ This channel is for probe execution and evidence capture only. Product code must
 | Paragraph styles | Can a named style be created, applied, and read back in a scratch document? | Created/applied style names and scratch-document cleanup | Pass in memory; persistence not run |
 | Character styles | Can a named style be created, applied, and read back in a scratch document? | Created/applied style names and scratch-document cleanup | Pass in memory; persistence not run |
 | Object styles | Can a style be applied to a placed graphic frame and read back? | Style identity and frame properties | Not run |
-| Script labels | Do namespaced keyed labels survive save/reopen and locate uniquely? | Key/value report before and after reopen | Not run |
+| Script labels | Do namespaced keyed labels survive save/reopen and locate uniquely? | Key/value report before and after reopen | Pass in memory and across save/reopen |
 | Parent pages and page operations | Can a template parent be assigned and an appropriate page duplicated? | Page count, parent identity, and item placement | Not run |
 | Stories and threading | Can the adapter populate one story and link template frames in order? | Story text and previous/next frame chain | Not run |
 | Overset | Does the host report the expected overset state before and after adding flow capacity? | `overflows` and page/frame counts | Not run |
@@ -49,7 +58,7 @@ This channel is for probe execution and evidence capture only. Product code must
 | Text wrap | Can wrap mode and offsets be applied and read back? | Wrap properties and exported page | Not run |
 | Export | Can configured exports run without dialogs? | File existence, page count, and export settings | Not run |
 | Font substitution | Can missing/substituted fonts be detected reliably? | Host-reported font state and diagnostic mapping | Not run |
-| Stable identity | Which IDs remain stable across save/reopen and duplicate operations? | Identity comparison across operations | Not run |
+| Stable identity | Which IDs remain stable across save/reopen and duplicate operations? | Identity comparison across operations | Partial: `Page`/`PageItem.id` stable across save/reopen; duplicate operation not run |
 | UXP file access | Can the plugin request a workspace folder and exchange job/result files? | Permission flow, read/write, polling, and restart behavior | Not run |
 
 ## Official Adobe references

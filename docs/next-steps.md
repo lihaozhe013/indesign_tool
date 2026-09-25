@@ -13,6 +13,7 @@ Status checked on 2026-09-24:
 - The read-only scan of the disposable Zijiang report copy passed `TemplateScan v1` validation. It found 20 pages, 261 stories, 893 page items, 15 paragraph styles, 20 character styles, and 9 object styles. It reported two missing-link instances for the same JPG, seven out-of-date links, one substituted font face, and no overset stories.
 - The paragraph-style scratch-document probe passed: it created and applied `Publisher Probe Body`, read it back, closed without saving, and restored the open-document count from 1 to 1.
 - The character-style scratch-document probe passed: it created and applied `Publisher Probe Emphasis`, read the applied style back, closed without saving, and restored the open-document count from 1 to 1. Two independent runs on 2026-09-24 produced the same passing record. In-memory only; save/reopen persistence is a separate probe.
+- The script-label probes passed in memory and across a separate save/close/reopen run: namespaced labels on document, page, text-frame, and style objects persist, and label-value lookup is reliable for both unique and duplicate matches. ADR 0003 is decided: `com.publisher.role` labels are the annotation mechanism; the sidecar fallback is rejected. Host hazards (`fullName` never settles, `getByName` does not exist, leaked hung probes corrupt counts) are recorded in the probe guide.
 - The report is an inspection sample, not the initial publishing template. Do not force its 261 independent stories into the single main-article-story model.
 
 Host probe evidence and procedures are in [the InDesign probe guide](indesign-probes/README.md). Local host artifacts live under the ignored `artifacts/host/indesign-21.0.0.192/` directory. Do not commit the designer's `.indd`, IDML, PDF, fonts, or linked assets.
@@ -25,16 +26,9 @@ The probe recorded `success: true` with matching created/applied names (`Publish
 
 Probe execution is now automated: `scripts/run-indesign-probe.mjs` runs a `.idjs` probe via AppleScript `do script ... language uxpscript` (any POSIX path; no Scripts panel click and no UXP Developer Tool needed) and extracts the tagged JSON record from the newest UXP log.
 
-### 2. Resolve the template-annotation mechanism
+### 2. Resolve the template-annotation mechanism (done 2026-09-24)
 
-Run separate probes against disposable scratch documents:
-
-1. Write and read a namespaced keyed script label on document, page, text-frame, and style objects in the same session, including duplicate-label disambiguation.
-2. Save the scratch document, close it, reopen it, and read the same labels in a separate run.
-3. Test whether duplicate or renamed objects can still be resolved unambiguously by label lookup across `allPageItems`.
-4. If labels fail persistence or reliable lookup, probe a generated sidecar manifest keyed by unique template object names before selecting that fallback.
-
-Record each result and make the annotation ADR decision only after the relevant host behavior is observed. Do not change the real report source.
+Labels round-trip in memory on document, page, text-frame, and paragraph/character/object-style objects with the key `com.publisher.role`; unset keys read `""`; a second key is isolated. A labeled scratch document saved by string path, closed, and reopened in a separate run preserved every label, and label-value lookup returned correct unique and duplicate matches. `Page.id`/`PageItem.id` were stable across reopen while `Document.id` was session-local. ADR 0003 now selects keyed script labels; the object-name sidecar fallback is rejected. See the probe guide for the failed attempt 1 (`getByName`), the invalidated attempt 2 (leaked open document), and the resulting probe-hygiene rules. Do not change the real report source.
 
 ### 3. Verify native story flow and page operations
 
