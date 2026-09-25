@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted for the queue contract; UXP file access remains pending host probe
+Accepted for the queue contract; storage implementation blocked on the panel manifest
 
 ## Decision
 
@@ -16,4 +16,4 @@ This keeps CLI and host code separate, avoids platform-specific process automati
 
 ## Consequences
 
-The UXP folder permission and polling behavior must pass a host probe. CLI host commands currently report `HostUnavailable`; concrete host commands will enqueue and wait only after the runner transport is implemented and exercised.
+The 2026-09-24 host probe showed that a Scripts Panel execution can obtain the plugin temporary folder and create a file, but `file.write`, `file.read`, and `file.delete` never settle, and `file.open` does not exist. File-based job transport therefore requires a real UXP panel with `localFileSystem` manifest permissions loaded through the UXP Developer Tool (not installed on this workstation). CLI host commands currently report `HostUnavailable`; concrete host commands will enqueue and wait only after that panel transport exists. AppleScript `do script` cannot substitute for it because its `with arguments` values are not delivered to a `.idjs` script.
