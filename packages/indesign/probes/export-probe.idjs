@@ -1,0 +1,113 @@
+const { app, SaveOptions } = require("indesign");
+
+// One capability: export an open generated document to PDF and PNG without
+// dialogs or selection. The probe reports export settings and return values;
+// file existence and size are verified from the shell afterwards because the
+// probe cannot stat files.
+const EXPORT_DIR = "/Users/lihaozhe/dev/indesign_tool/artifacts/host/indesign-21.0.0.192/export-probe";
+const PDF_PATH = EXPORT_DIR + "/probe-export.pdf";
+const PNG_PATH = EXPORT_DIR + "/probe-export.png";
+
+function read(readValue, fallback) {
+  try {
+    const value = readValue();
+    return value === undefined || value === null ? fallback : value;
+  } catch (_error) {
+    return fallback;
+  }
+}
+
+async function settled(value) {
+  return value && typeof value.then === "function" ? await value : value;
+}
+
+const result = {
+  probeVersion: 2,
+  capability: "dialog-free-pdf-and-png-export",
+  hostVersion: String(app.version),
+  domVersion: String(app.scriptPreferences.version),
+  openDocumentCountBefore: app.documents.length,
+  pdfPath: PDF_PATH,
+  pngPath: PNG_PATH,
+  success: false
+};
+
+(async function main() {
+  let scratchDocument;
+  try {
+    const inDesign = require("indesign");
+    const ExportFormat = inDesign.ExportFormat;
+    result.exportFormatKeys = Object.keys(ExportFormat || {});
+    result.pdfFormatAvailable = String(read(function () { return ExportFormat.PDF_TYPE; }, "missing"));
+    result.pngFormatAvailable = String(read(function () { return ExportFormat.PNG_FORMAT; }, "missing"));
+
+    scratchDocument = await settled(app.documents.add());
+    const page = scratchDocument.pages.item(0);
+    const pageBounds = read(function () { return page.bounds; }, [0, 0, 200, 300]);
+    const frame = page.textFrames.add({
+      geometricBounds: [pageBounds[0] + 20, pageBounds[1] + 20, pageBounds[0] + 120, pageBounds[3] - 20]
+    });
+    frame.contents = "导出探针：中文与 English export content.";
+    await settled(scratchDocument.pages.add());
+
+    app.pdfExportPreferences.pageRange = "1-2";
+    result.pdfPreferences = {
+      pageRange: String(read(function () { return app.pdfExportPreferences.pageRange; }, ""))
+    };
+    let pdfResult;
+    let pdfError = null;
+    try {
+      pdfResult = await settled(scratchDocument.exportFile(ExportFormat.PDF_TYPE, PDF_PATH, false));
+    } catch (error) {
+      pdfError = String(error && error.message ? error.message : error);
+    }
+    result.pdfExport = { error: pdfError, returned: pdfResult === undefined ? "undefined" : String(pdfResult) };
+
+    app.pngExportPreferences.pageString = "1";
+    app.pngExportPreferences.exportResolution = 72;
+    result.pngPreferences = {
+      pageString: String(read(function () { return app.pngExportPreferences.pageString; }, "")),
+      exportResolution: read(function () { return app.pngExportPreferences.exportResolution; }, null)
+    };
+    let pngResult;
+    let pngError = null;
+    try {
+      pngResult = await settled(scratchDocument.exportFile(ExportFormat.PNG_FORMAT, PNG_PATH, false));
+    } catch (error) {
+      pngError = String(error && error.message ? error.message : error);
+    }
+    result.pngExport = { error: pngError, returned: pngResult === undefined ? "undefined" : String(pngResult) };
+
+    result.pageCount = scratchDocument.pages.length;
+    result.checks = {
+      pdfCalledWithoutError: pdfError === null,
+      pngCalledWithoutError: pngError === null,
+      documentStillOpen: scratchDocument.pages.length === 2
+    };
+    result.success = Object.keys(result.checks).every(function (key) { return result.checks[key] === true; });
+  } catch (error) {
+    result.error = String(error && error.stack ? error.stack : error);
+  } finally {
+    if (scratchDocument) {
+      try {
+        await settled(scratchDocument.close(SaveOptions.NO));
+        result.scratchDocumentClosed = true;
+      } catch (error) {
+        result.scratchDocumentClosed = false;
+        result.closeError = String(error && error.stack ? error.stack : error);
+      }
+    } else {
+      result.scratchDocumentClosed = false;
+    }
+    result.openDocumentCountImmediate = app.documents.length;
+    // app.documents.length can transiently include a document that the host
+    // is still finalizing after close(); timers do not fire in this execution
+    // context, so the probe records the residue instead of waiting it out.
+    result.countResiduePossible = result.openDocumentCountImmediate !== result.openDocumentCountBefore;
+    result.success = result.success
+      && result.scratchDocumentClosed
+      && (result.openDocumentCountImmediate === result.openDocumentCountBefore
+        || result.openDocumentCountImmediate === result.openDocumentCountBefore + 1);
+    console.log("PUBLISHER_EXPORT_PROBE_V2 " + JSON.stringify(result));
+  }
+})();

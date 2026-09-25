@@ -1,0 +1,124 @@
+const { app, SaveOptions } = require("indesign");
+
+// One capability: enumerate document fonts with status, read the applied font
+// of a paragraph, and detect how an unavailable font surfaces (throw versus a
+// substituted status). This is the host evidence behind FontMissing and
+// FontSubstituted diagnostics.
+const MISSING_FONT_NAME = "Publisher Probe Missing Font 2026";
+
+function read(readValue, fallback) {
+  try {
+    const value = readValue();
+    return value === undefined || value === null ? fallback : value;
+  } catch (_error) {
+    return fallback;
+  }
+}
+
+function items(collection) {
+  const output = [];
+  for (let index = 0; index < collection.length; index += 1) {
+    output.push(typeof collection.item === "function" ? collection.item(index) : collection[index]);
+  }
+  return output;
+}
+
+function fontRecord(font) {
+  if (!font) return null;
+  return {
+    name: String(read(function () { return font.name; }, "")),
+    family: String(read(function () { return font.fontFamily; }, "")),
+    styleName: String(read(function () { return font.fontStyleName; }, "")),
+    status: String(read(function () { return font.status; }, "unreadable")),
+    isValid: read(function () { return font.isValid; }, null)
+  };
+}
+
+const result = {
+  probeVersion: 3,
+  capability: "font-status-and-substitution-detection",
+  hostVersion: String(app.version),
+  domVersion: String(app.scriptPreferences.version),
+  openDocumentCountBefore: app.documents.length,
+  missingFontName: MISSING_FONT_NAME,
+  success: false
+};
+
+let scratchDocument;
+
+try {
+  scratchDocument = app.documents.add();
+  const page = scratchDocument.pages.item(0);
+  const pageBounds = read(function () { return page.bounds; }, [0, 0, 200, 300]);
+  const frame = page.textFrames.add({
+    geometricBounds: [pageBounds[0] + 20, pageBounds[1] + 20, pageBounds[0] + 80, pageBounds[3] - 20],
+    contents: "字体状态探针 paragraph。"
+  });
+  const paragraph = frame.parentStory.paragraphs.item(0);
+
+  const documentFonts = items(scratchDocument.fonts);
+  result.appFontCount = read(function () { return app.fonts.length; }, null);
+  result.documentFontCount = documentFonts.length;
+  result.documentFonts = documentFonts.slice(0, 12).map(fontRecord);
+  result.nonInstalledFonts = result.documentFonts.filter(function (font) {
+    return font !== null && font.status !== "INSTALLED";
+  });
+  result.appliedFont = fontRecord(read(function () { return paragraph.appliedFont; }, null));
+
+  let assignmentError = null;
+  let assignmentResult = null;
+  try {
+    paragraph.font = MISSING_FONT_NAME;
+    assignmentResult = "assigned";
+  } catch (error) {
+    assignmentError = String(error && error.message ? error.message : error);
+  }
+  const appliedAfter = read(function () { return paragraph.appliedFont; }, null);
+  const appliedFontName = result.appliedFont ? result.appliedFont.name : "";
+  const missingFontLookup = read(function () { return app.fonts.itemByName(MISSING_FONT_NAME); }, null);
+  const realFontLookup = appliedFontName
+    ? read(function () { return app.fonts.itemByName(appliedFontName); }, null) : null;
+  result.fontLookups = {
+    missingFontIsValid: missingFontLookup ? read(function () { return missingFontLookup.isValid; }, null) : null,
+    missingFontStatus: missingFontLookup ? String(read(function () { return missingFontLookup.status; }, "unreadable")) : null,
+    realFontIsValid: realFontLookup ? read(function () { return realFontLookup.isValid; }, null) : null
+  };
+  result.missingFontAttempt = {
+    assignmentResult: assignmentResult,
+    assignmentError: assignmentError,
+    appliedFontAfter: fontRecord(appliedAfter),
+    documentFontCountAfter: read(function () { return scratchDocument.fonts.length; }, null),
+    substitutedEntriesAfter: items(scratchDocument.fonts)
+      .map(fontRecord)
+      .filter(function (font) { return font !== null && font.status !== "INSTALLED"; })
+  };
+
+  result.checks = {
+    fontsEnumerable: result.documentFontCount > 0,
+    appliedFontReadable: result.appliedFont !== null
+      && result.appliedFont.name.length > 0
+      && result.appliedFont.status === "INSTALLED",
+    realFontLookupValid: result.fontLookups.realFontIsValid === true,
+    missingFontStatusNotAvailable: result.fontLookups.missingFontStatus === "NOT_AVAILABLE"
+  };
+  result.success = Object.keys(result.checks).every(function (key) { return result.checks[key] === true; });
+} catch (error) {
+  result.error = String(error && error.stack ? error.stack : error);
+} finally {
+  if (scratchDocument) {
+    try {
+      scratchDocument.close(SaveOptions.NO);
+      result.scratchDocumentClosed = true;
+    } catch (error) {
+      result.scratchDocumentClosed = false;
+      result.closeError = String(error && error.stack ? error.stack : error);
+    }
+  } else {
+    result.scratchDocumentClosed = false;
+  }
+  result.openDocumentCountAfter = app.documents.length;
+  result.success = result.success
+    && result.scratchDocumentClosed
+    && result.openDocumentCountAfter === result.openDocumentCountBefore;
+  console.log("PUBLISHER_FONT_STATUS_PROBE_V3 " + JSON.stringify(result));
+}

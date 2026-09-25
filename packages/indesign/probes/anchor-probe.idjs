@@ -1,0 +1,119 @@
+const { app, SaveOptions } = require("indesign");
+
+// One capability: anchor a placed graphic at a story insertion point and read
+// the anchoring relationship back. Records how an inline anchored frame is
+// reached from the story so the adapter can place illustrations at semantic
+// block positions without manual positioning.
+const ASSET_PATH = "/Users/lihaozhe/dev/indesign_tool/artifacts/host/indesign-21.0.0.192/assets/probe-image.png";
+
+function read(readValue, fallback) {
+  try {
+    const value = readValue();
+    return value === undefined || value === null ? fallback : value;
+  } catch (_error) {
+    return fallback;
+  }
+}
+
+function items(collection) {
+  const output = [];
+  for (let index = 0; index < collection.length; index += 1) {
+    output.push(typeof collection.item === "function" ? collection.item(index) : collection[index]);
+  }
+  return output;
+}
+
+function typeName(object) {
+  return String(read(function () { return object.constructor.name; }, "unknown"));
+}
+
+const result = {
+  probeVersion: 2,
+  capability: "inline-anchored-graphic",
+  hostVersion: String(app.version),
+  domVersion: String(app.scriptPreferences.version),
+  openDocumentCountBefore: app.documents.length,
+  assetPath: ASSET_PATH,
+  success: false
+};
+
+let scratchDocument;
+
+try {
+  scratchDocument = app.documents.add();
+  const page = scratchDocument.pages.item(0);
+  const pageBounds = read(function () { return page.bounds; }, [0, 0, 200, 300]);
+  const frame = page.textFrames.add({
+    geometricBounds: [pageBounds[0] + 20, pageBounds[1] + 20, pageBounds[0] + 120, pageBounds[3] - 20]
+  });
+  frame.contents = "锚定前第一段。\r锚定前第二段。";
+  const story = frame.parentStory;
+  const charactersBefore = story.characters.length;
+  const insertionPointsBefore = story.insertionPoints.length;
+
+  const anchoredGraphics = read(function () {
+    return items(story.insertionPoints.item(-1).place(ASSET_PATH));
+  }, []);
+  const graphic = anchoredGraphics.length > 0 ? anchoredGraphics[0] : null;
+  const anchoredFrame = graphic ? read(function () { return graphic.parent; }, null) : null;
+  const anchorHost = anchoredFrame ? read(function () { return anchoredFrame.parent; }, null) : null;
+
+  result.placement = {
+    placedCount: anchoredGraphics.length,
+    graphicId: graphic ? read(function () { return graphic.id; }, null) : null,
+    graphicType: graphic ? typeName(graphic) : null,
+    frameType: anchoredFrame ? typeName(anchoredFrame) : null,
+    anchorHostType: anchorHost ? typeName(anchorHost) : null,
+    anchorHostParentStoryId: anchorHost
+      ? read(function () { return anchorHost.parentStory.id; }, null) : null,
+    anchorHostIndex: anchorHost ? read(function () { return anchorHost.index; }, null) : null,
+    anchoredFrameStoryId: anchoredFrame
+      ? read(function () { return anchoredFrame.parentStory.id; }, null) : null,
+    textStoryId: read(function () { return story.id; }, null),
+    anchoredPosition: anchoredFrame
+      ? String(read(function () { return anchoredFrame.anchoredObjectSettings.anchoredPosition; }, "unreadable"))
+      : null,
+    anchorPoint: anchoredFrame
+      ? String(read(function () { return anchoredFrame.anchoredObjectSettings.anchorPoint; }, "unreadable"))
+      : null,
+    anchoredFrameBounds: anchoredFrame
+      ? read(function () { return anchoredFrame.geometricBounds; }, null) : null
+  };
+  result.storyAfter = {
+    characterCount: story.characters.length,
+    insertionPointCount: story.insertionPoints.length,
+    contents: String(story.contents),
+    textFramesOnPage: page.textFrames.length,
+    rectsOnPage: read(function () { return page.rectangles.length; }, null)
+  };
+
+  result.checks = {
+    graphicPlacedInline: result.placement.placedCount === 1,
+    anchoredInTextStory: result.placement.anchorHostParentStoryId !== null
+      && result.placement.anchorHostParentStoryId === result.placement.textStoryId,
+    anchorHostIsAnchorCharacter: result.placement.anchorHostType === "Character",
+    inlinePosition: result.placement.anchoredPosition === "INLINE_POSITION",
+    contentPreserved: result.storyAfter.contents.indexOf("锚定前第一段。") >= 0
+      && result.storyAfter.contents.indexOf("锚定前第二段。") >= 0
+  };
+  result.success = Object.keys(result.checks).every(function (key) { return result.checks[key] === true; });
+} catch (error) {
+  result.error = String(error && error.stack ? error.stack : error);
+} finally {
+  if (scratchDocument) {
+    try {
+      scratchDocument.close(SaveOptions.NO);
+      result.scratchDocumentClosed = true;
+    } catch (error) {
+      result.scratchDocumentClosed = false;
+      result.closeError = String(error && error.stack ? error.stack : error);
+    }
+  } else {
+    result.scratchDocumentClosed = false;
+  }
+  result.openDocumentCountAfter = app.documents.length;
+  result.success = result.success
+    && result.scratchDocumentClosed
+    && result.openDocumentCountAfter === result.openDocumentCountBefore;
+  console.log("PUBLISHER_ANCHOR_PROBE_V2 " + JSON.stringify(result));
+}

@@ -1,0 +1,92 @@
+const { app } = require("indesign");
+
+// Capability report: what UXP file access is available to a Scripts Panel
+// execution, and what is not.
+//
+// Observed on 2026-09-24 (InDesign 21.0.0.192, UXP 9.0.3-local):
+// - require("uxp"), storage.localFileSystem, and getTemporaryFolder() work.
+// - folder.createFile(name) resolves and creates a 0-byte file on disk.
+// - file.write(data) never settles, and file.read() never settles. A probe
+//   that awaited them hung until the runner timed out.
+// - file.open(mode) does not exist in this UXP File implementation.
+//
+// The main record is emitted before the cleanup attempt so a hanging FS call
+// cannot erase the evidence. The queued job/result transport therefore needs
+// a real UXP panel with manifest permissions (UXP Developer Tool), not a
+// Scripts Panel script.
+const FILE_NAME = "publisher-probe-io.json";
+
+function read(readValue, fallback) {
+  try {
+    const value = readValue();
+    return value === undefined || value === null ? fallback : value;
+  } catch (_error) {
+    return fallback;
+  }
+}
+
+function logStep(step, data) {
+  console.log("PUBLISHER_UXP_FILE_IO_STEP_V1 " + JSON.stringify(Object.assign({ step: step }, data)));
+}
+
+async function settled(value) {
+  return value && typeof value.then === "function" ? await value : value;
+}
+
+const result = {
+  probeVersion: 4,
+  capability: "uxp-file-system-exchange",
+  hostVersion: String(app.version),
+  domVersion: String(app.scriptPreferences.version),
+  writeSupported: "no: file.write never settles in a Scripts Panel execution",
+  readSupported: "no: file.read never settles in a Scripts Panel execution",
+  openMethod: "absent: createdEntry.open is not a function",
+  transportImplication: "job/result files require a UXP panel with manifest permissions",
+  success: false
+};
+
+(async function main() {
+  let createdEntry = null;
+  try {
+    let uxpModule = null;
+    try {
+      uxpModule = require("uxp");
+    } catch (error) {
+      result.requireUxpError = String(error && error.message ? error.message : error);
+    }
+    result.uxpModuleLoaded = uxpModule !== null;
+    result.storageAvailable = Boolean(uxpModule && uxpModule.storage);
+
+    if (!result.storageAvailable) throw new Error("uxp.storage is not available");
+    const localFileSystem = uxpModule.storage.localFileSystem;
+    const tempFolder = await settled(localFileSystem.getTemporaryFolder());
+    result.tempFolderPath = String(read(function () { return tempFolder.nativePath; }, ""));
+
+    createdEntry = await settled(tempFolder.createFile(FILE_NAME, { overwrite: true }));
+    result.createdFilePath = String(read(function () { return createdEntry.nativePath; }, ""));
+    result.fileSizeAfterCreate = read(function () { return createdEntry.size; }, null);
+
+    result.checks = {
+      uxpLoaded: result.uxpModuleLoaded === true,
+      tempFolderAvailable: result.tempFolderPath.length > 0,
+      fileCreated: result.createdFilePath.length > 0
+    };
+    result.success = Object.keys(result.checks).every(function (key) { return result.checks[key] === true; });
+    logStep("verified", { path: result.createdFilePath, size: result.fileSizeAfterCreate });
+    console.log("PUBLISHER_UXP_FILE_IO_PROBE_V1 " + JSON.stringify(result));
+
+    // Cleanup is best effort and logged separately; it is not covered by the
+    // success gate because the same FS gate may block it.
+    try {
+      await settled(createdEntry.delete());
+      createdEntry = null;
+      logStep("deleted", { deleted: true });
+    } catch (error) {
+      logStep("deleteFailed", { message: String(error && error.message ? error.message : error) });
+    }
+  } catch (error) {
+    result.error = String(error && error.stack ? error.stack : error);
+    logStep("error", { message: String(error && error.message ? error.message : error) });
+    console.log("PUBLISHER_UXP_FILE_IO_PROBE_V1 " + JSON.stringify(result));
+  }
+})();

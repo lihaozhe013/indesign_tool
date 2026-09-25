@@ -1,0 +1,95 @@
+const { app, SaveOptions, TextWrapModes } = require("indesign");
+
+// One capability: apply a text wrap around a placed graphic, read the wrap
+// preferences back, and observe whether the host recomposes the overlapping
+// text. Wrap mode and offsets are recorded as host strings/enums rather than
+// assumed numeric values.
+const ASSET_PATH = "/Users/lihaozhe/dev/indesign_tool/artifacts/host/indesign-21.0.0.192/assets/probe-image.png";
+
+function read(readValue, fallback) {
+  try {
+    const value = readValue();
+    return value === undefined || value === null ? fallback : value;
+  } catch (_error) {
+    return fallback;
+  }
+}
+
+const result = {
+  probeVersion: 2,
+  capability: "text-wrap-around-graphic",
+  hostVersion: String(app.version),
+  domVersion: String(app.scriptPreferences.version),
+  openDocumentCountBefore: app.documents.length,
+  wrapModeKeys: Object.keys(TextWrapModes || {}),
+  success: false
+};
+
+let scratchDocument;
+
+try {
+  scratchDocument = app.documents.add();
+  const page = scratchDocument.pages.item(0);
+  const pageBounds = read(function () { return page.bounds; }, [0, 0, 200, 300]);
+  const frame = page.textFrames.add({
+    geometricBounds: [pageBounds[0] + 20, pageBounds[1] + 20, pageBounds[0] + 160, pageBounds[3] - 20]
+  });
+  const wrapLine = "绕排测试文本，用于观察 InDesign 是否在应用环绕后重新排版并增加行数。";
+  frame.contents = new Array(8).join(wrapLine + "\r") + wrapLine + "\r第二段提供更多行以供环绕影响。";
+  const story = frame.parentStory;
+  const linesBefore = read(function () { return story.lines.length; }, null);
+  const charactersBefore = story.characters.length;
+
+  const rect = page.rectangles.add({
+    geometricBounds: [pageBounds[0] + 60, pageBounds[1] + 30, pageBounds[0] + 110, pageBounds[3] - 60]
+  });
+  const placedGraphics = read(function () { return rect.place(ASSET_PATH); }, []);
+  rect.textWrapPreferences.textWrapMode = TextWrapModes.BOUNDING_BOX_TEXT_WRAP;
+  rect.textWrapPreferences.textWrapOffset = [2, 2, 2, 2];
+
+  const wrap = read(function () { return rect.textWrapPreferences; }, null);
+  result.wrap = {
+    graphicCount: placedGraphics ? placedGraphics.length : null,
+    textWrapMode: String(read(function () { return wrap.textWrapMode; }, "unreadable")),
+    textWrapOffset: read(function () { return wrap.textWrapOffset; }, null),
+    textWrapSide: String(read(function () { return wrap.textWrapSide; }, "unreadable")),
+    wrapModeIsBoundingBox: String(read(function () { return wrap.textWrapMode; }, "")) === "BOUNDING_BOX_TEXT_WRAP"
+  };
+  result.composition = {
+    linesBefore: linesBefore,
+    linesAfter: read(function () { return story.lines.length; }, null),
+    charactersBefore: charactersBefore,
+    charactersAfter: story.characters.length,
+    contentsPreserved: String(story.contents).indexOf("绕排测试文本") >= 0
+  };
+
+  result.checks = {
+    graphicPlaced: result.wrap.graphicCount === 1,
+    wrapModeReadback: result.wrap.textWrapMode === "BOUNDING_BOX_TEXT_WRAP"
+      && result.wrap.wrapModeIsBoundingBox === true,
+    wrapOffsetReadback: Array.isArray(result.wrap.textWrapOffset)
+      && result.wrap.textWrapOffset.length === 4,
+    textPreserved: result.composition.charactersAfter === result.composition.charactersBefore
+      && result.composition.contentsPreserved === true
+  };
+  result.success = Object.keys(result.checks).every(function (key) { return result.checks[key] === true; });
+} catch (error) {
+  result.error = String(error && error.stack ? error.stack : error);
+} finally {
+  if (scratchDocument) {
+    try {
+      scratchDocument.close(SaveOptions.NO);
+      result.scratchDocumentClosed = true;
+    } catch (error) {
+      result.scratchDocumentClosed = false;
+      result.closeError = String(error && error.stack ? error.stack : error);
+    }
+  } else {
+    result.scratchDocumentClosed = false;
+  }
+  result.openDocumentCountAfter = app.documents.length;
+  result.success = result.success
+    && result.scratchDocumentClosed
+    && result.openDocumentCountAfter === result.openDocumentCountBefore;
+  console.log("PUBLISHER_TEXT_WRAP_PROBE_V2 " + JSON.stringify(result));
+}

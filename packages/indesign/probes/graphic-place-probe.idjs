@@ -1,0 +1,143 @@
+const { app, SaveOptions, FitOptions } = require("indesign");
+
+// One capability: place a generated PNG, read link status and image facts,
+// apply an object style to the containing frame, fit the graphic, and record
+// the failure shape for a missing asset. Uses only the disposable probe asset.
+const ASSET_PATH = "/Users/lihaozhe/dev/indesign_tool/artifacts/host/indesign-21.0.0.192/assets/probe-image.png";
+const MISSING_PATH = "/Users/lihaozhe/dev/indesign_tool/artifacts/host/indesign-21.0.0.192/assets/does-not-exist.png";
+
+function read(readValue, fallback) {
+  try {
+    const value = readValue();
+    return value === undefined || value === null ? fallback : value;
+  } catch (_error) {
+    return fallback;
+  }
+}
+
+function items(collection) {
+  const output = [];
+  for (let index = 0; index < collection.length; index += 1) {
+    output.push(typeof collection.item === "function" ? collection.item(index) : collection[index]);
+  }
+  return output;
+}
+
+function linkRecord(graphic) {
+  const link = read(function () { return graphic.itemLink; }, null);
+  if (!link) return null;
+  return {
+    filePath: String(read(function () { return link.filePath; }, "")),
+    name: String(read(function () { return link.name; }, "")),
+    status: read(function () { return link.status; }, null),
+    statusName: String(read(function () { return String(link.status); }, "")),
+    missing: read(function () { return link.status === 13616 || link.status === 1819243123; }, null)
+  };
+}
+
+const result = {
+  probeVersion: 2,
+  capability: "graphic-place-link-and-fit",
+  hostVersion: String(app.version),
+  domVersion: String(app.scriptPreferences.version),
+  openDocumentCountBefore: app.documents.length,
+  assetPath: ASSET_PATH,
+  fitOptionsKeys: Object.keys(FitOptions || {}),
+  success: false
+};
+
+let scratchDocument;
+
+try {
+  scratchDocument = app.documents.add();
+  const page = scratchDocument.pages.item(0);
+  const pageBounds = read(function () { return page.bounds; }, [0, 0, 200, 300]);
+
+  const autoPlaced = read(function () { return items(page.place(ASSET_PATH)); }, []);
+  result.autoPlace = {
+    placedCount: autoPlaced.length,
+    graphicId: autoPlaced.length > 0 ? read(function () { return autoPlaced[0].id; }, null) : null,
+    parentIsFrame: autoPlaced.length > 0
+      ? read(function () { return autoPlaced[0].parent.constructor.name; }, null) : null,
+    link: autoPlaced.length > 0 ? linkRecord(autoPlaced[0]) : null,
+    imageTypeName: autoPlaced.length > 0
+      ? String(read(function () { return autoPlaced[0].imageTypeName; }, "")) : null,
+    effectivePpi: autoPlaced.length > 0
+      ? read(function () { return autoPlaced[0].effectivePpi; }, null) : null
+  };
+
+  const frame = page.rectangles.add({
+    geometricBounds: [pageBounds[0] + 120, pageBounds[1] + 20, pageBounds[0] + 180, pageBounds[3] - 20]
+  });
+  const objectStyle = scratchDocument.objectStyles.add({ name: "Publisher Probe Image Frame" });
+  frame.applyObjectStyle(objectStyle, true);
+  const placedInFrame = read(function () { return items(frame.place(ASSET_PATH)); }, []);
+  const graphic = placedInFrame.length > 0 ? placedInFrame[0] : null;
+  const boundsBeforeFit = read(function () { return frame.geometricBounds; }, null);
+  const graphicBoundsBeforeFit = graphic ? read(function () { return graphic.geometricBounds; }, null) : null;
+  const ppiBeforeFit = graphic ? read(function () { return graphic.effectivePpi; }, null) : null;
+  let fitOutcome = null;
+  try {
+    fitOutcome = String(frame.fit(FitOptions.FILL_PROPORTIONALLY));
+  } catch (error) {
+    fitOutcome = "error: " + String(error && error.message ? error.message : error);
+  }
+  result.framePlace = {
+    placedCount: placedInFrame.length,
+    appliedObjectStyleName: String(read(function () { return frame.appliedObjectStyle.name; }, "")),
+    graphicCount: read(function () { return frame.graphics.length; }, null),
+    link: graphic ? linkRecord(graphic) : null,
+    boundsBeforeFit: boundsBeforeFit,
+    boundsAfterFit: read(function () { return frame.geometricBounds; }, null),
+    graphicBoundsBeforeFit: graphicBoundsBeforeFit,
+    graphicBoundsAfterFit: graphic ? read(function () { return graphic.geometricBounds; }, null) : null,
+    ppiBeforeFit: ppiBeforeFit,
+    ppiAfterFit: graphic ? read(function () { return graphic.effectivePpi; }, null) : null,
+    fitOutcome: fitOutcome,
+    fittingOnEmptyFrame: String(read(function () {
+      return frame.frameFittingOptions.fittingOnEmptyFrame;
+    }, "unreadable"))
+  };
+
+  let missingError = null;
+  try {
+    page.place(MISSING_PATH);
+  } catch (error) {
+    missingError = String(error && error.message ? error.message : error);
+  }
+  result.missingAsset = {
+    threw: missingError !== null,
+    error: missingError
+  };
+
+  result.checks = {
+    assetPlaced: result.autoPlace.placedCount === 1,
+    linkResolved: result.autoPlace.link !== null
+      && result.autoPlace.link.filePath.indexOf("probe-image.png") >= 0,
+    linkNotMissing: result.autoPlace.link !== null && result.autoPlace.link.missing === false,
+    imageFacts: result.autoPlace.imageTypeName !== null && result.autoPlace.effectivePpi !== null,
+    frameStyledAndPlaced: result.framePlace.graphicCount === 1
+      && result.framePlace.appliedObjectStyleName === "Publisher Probe Image Frame",
+    missingAssetFails: result.missingAsset.threw === true
+  };
+  result.success = Object.keys(result.checks).every(function (key) { return result.checks[key] === true; });
+} catch (error) {
+  result.error = String(error && error.stack ? error.stack : error);
+} finally {
+  if (scratchDocument) {
+    try {
+      scratchDocument.close(SaveOptions.NO);
+      result.scratchDocumentClosed = true;
+    } catch (error) {
+      result.scratchDocumentClosed = false;
+      result.closeError = String(error && error.stack ? error.stack : error);
+    }
+  } else {
+    result.scratchDocumentClosed = false;
+  }
+  result.openDocumentCountAfter = app.documents.length;
+  result.success = result.success
+    && result.scratchDocumentClosed
+    && result.openDocumentCountAfter === result.openDocumentCountBefore;
+  console.log("PUBLISHER_GRAPHIC_PLACE_PROBE_V2 " + JSON.stringify(result));
+}
