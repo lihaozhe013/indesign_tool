@@ -62,4 +62,41 @@ describe("createTemplateInventory", () => {
     expect(result.inventory).toBeUndefined();
     expect(result.diagnostics).toContainEqual(expect.objectContaining({ code: "Template.AnnotationTargetMissing" }));
   });
+
+  it("resolves a parent-page flow frame to the page that applies that parent", () => {
+    const parentScan: TemplateScan = {
+      ...scan,
+      document: { ...scan.document, pageCount: 2 },
+      pages: [
+        { ref: "page:1", index: 0, name: "1", roleLabel: "page-cover" },
+        { ref: "page:2", index: 1, name: "2", roleLabel: "page-article", appliedParentPageRef: "parent:1" }
+      ],
+      frames: [{ ref: "frame:1", index: 0, name: "Flow", kind: "text", parentPageRef: "parent:1", storyRef: "story:1" }]
+    };
+    const parentAssignments: TemplateRoleAssignments = {
+      ...assignments,
+      pageRoles: [{ ref: "page:1", role: "Cover" }, { ref: "page:2", role: "Article" }]
+    };
+    const result = createTemplateInventory(parentScan, parentAssignments);
+    expect(result.diagnostics).toEqual([]);
+    expect(result.inventory?.frames[0]).toMatchObject({ pageRef: "page:2", role: "article-flow" });
+    const compiled = compileTemplate(result.inventory!);
+    expect(compiled.diagnostics).toEqual([]);
+    expect(compiled.template?.pageRoles.Article).toEqual({ sourcePageRef: "page:2", flowFrameRef: "frame:1" });
+  });
+
+  it("keeps an unapplied parent-page reference instead of inventing a page", () => {
+    const orphanScan: TemplateScan = {
+      ...scan,
+      document: { ...scan.document, pageCount: 1, parentPageCount: 1, storyCount: 0 },
+      pages: [{ ref: "page:1", index: 0, name: "1" }],
+      frames: [{ ref: "frame:1", index: 0, name: "Flow", kind: "text", parentPageRef: "parent:1" }],
+      stories: []
+    };
+    const result = createTemplateInventory(orphanScan, {
+      ...assignments,
+      pageRoles: [{ ref: "page:1", role: "Cover" }]
+    });
+    expect(result.inventory?.frames[0]).toMatchObject({ pageRef: "parent:1" });
+  });
 });

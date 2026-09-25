@@ -40,6 +40,16 @@ export function createTemplateInventory(
   const pageRoles = new Map(assignments.pageRoles.map(({ ref, role }) => [ref, role]));
   const frameRoles = new Map(assignments.frameRoles.map(({ ref, role }) => [ref, role]));
   const styleRoles = new Map(assignments.styleRoles.map(({ ref, role }) => [ref, role]));
+
+  // A frame defined on a parent page is provided to every page that applies
+  // that parent. Resolve it to the first such page in document order so page
+  // role and flow-frame checks can use it; an unapplied parent page keeps its
+  // own reference and is reported as detached.
+  const firstPageByParentRef = new Map<string, string>();
+  for (const page of scan.pages) {
+    const parentRef = page.appliedParentPageRef;
+    if (parentRef && !firstPageByParentRef.has(parentRef)) firstPageByParentRef.set(parentRef, page.ref);
+  }
   const pages: TemplateInventory["pages"] = [...scan.pages, ...scan.parentPages].map((page) => ({
     ref: page.ref,
     name: page.name,
@@ -48,7 +58,8 @@ export function createTemplateInventory(
   }));
   const frames: TemplateInventory["frames"] = assignments.frameRoles.map(({ ref, role }) => {
     const frame = frameByRef.get(ref)!;
-    const pageRef = frame.pageRef ?? frame.parentPageRef;
+    const pageRef = frame.pageRef
+      ?? (frame.parentPageRef ? firstPageByParentRef.get(frame.parentPageRef) ?? frame.parentPageRef : undefined);
     if (!pageRef) {
       diagnostics.push(error("Template.FramePageMissing", "Annotated frame is not attached to a page", "frames." + ref));
     }
