@@ -29,7 +29,7 @@ function label(object) {
 }
 
 function roleLabel(object) {
-  const value = read(function () { return object.extractLabel("com.openai.structured-publisher.role"); }, "");
+  const value = read(function () { return object.extractLabel("com.publisher.role"); }, "");
   return value ? String(value) : undefined;
 }
 

@@ -1,0 +1,168 @@
+const { app, SaveOptions } = require("indesign");
+
+// Phase 2 of the persistence claim, run in its own execution after
+// label-save-probe.idjs: reopen the saved scratch document, verify every
+// namespaced label and the label-lookup behavior, and record host ids so the
+// save record can be compared for identity stability. Close without saving to
+// leave the file untouched.
+//
+// Attempt 1 of this probe used getByName, which does not exist on UXP
+// collections (itemByName is the documented lookup), so its style-label
+// failures were a probe bug, not host behavior. Attempt 2 read from a
+// leaked still-open copy of the target rather than from disk. This version
+// separates "style object not found" (null) from "found but label missing"
+// (empty) and refuses to read a document that is already open.
+const KEY = "com.publisher.role";
+const SCRATCH_FILE = "/Users/lihaozhe/dev/indesign_tool/artifacts/host/indesign-21.0.0.192/label-persist/scratch-labels.indd";
+
+const EXPECTED_LABELS = {
+  document: "probe-document",
+  page: "probe-page-article",
+  textFrameA: "probe-hero-title",
+  textFrameB: "probe-dup-slot",
+  textFrameC: "probe-dup-slot",
+  paragraphStyle: "probe-style-body",
+  characterStyle: "probe-style-emphasis",
+  objectStyle: "probe-style-frame"
+};
+
+function read(readValue, fallback) {
+  try {
+    const value = readValue();
+    return value === undefined || value === null ? fallback : value;
+  } catch (_error) {
+    return fallback;
+  }
+}
+
+function items(collection) {
+  const output = [];
+  for (let index = 0; index < collection.length; index += 1) {
+    output.push(typeof collection.item === "function" ? collection.item(index) : collection[index]);
+  }
+  return output;
+}
+
+function labelOfStyle(collection, styleName) {
+  const style = collection.itemByName(styleName);
+  const valid = read(function () { return style.isValid; }, false);
+  if (!valid) return null;
+  return String(read(function () { return style.extractLabel(KEY); }, ""));
+}
+
+async function settled(value) {
+  return value && typeof value.then === "function" ? await value : value;
+}
+
+const result = {
+  probeVersion: 4,
+  capability: "script-labels-reopen",
+  hostVersion: String(app.version),
+  domVersion: String(app.scriptPreferences.version),
+  openDocumentCountBefore: app.documents.length,
+  scratchFile: SCRATCH_FILE,
+  success: false
+};
+
+(async function main() {
+  let reopenedDocument;
+  try {
+    // A leaked or still-open copy of the target would silently satisfy reads
+    // from memory instead of disk, so refuse before opening anything.
+    let alreadyOpen = false;
+    for (const doc of items(app.documents)) {
+      if (String(read(function () { return doc.name; }, "")) === "scratch-labels.indd") alreadyOpen = true;
+    }
+    if (alreadyOpen) {
+      result.alreadyOpen = true;
+      throw new Error("scratch-labels.indd is already open; refusing memory-backed persistence evidence");
+    }
+
+    reopenedDocument = await settled(app.open(SCRATCH_FILE, true));
+
+    const page = reopenedDocument.pages.item(0);
+    const frames = items(page.textFrames);
+    const byName = {};
+    for (const frame of frames) {
+      byName[String(frame.name)] = String(read(function () { return frame.extractLabel(KEY); }, ""));
+    }
+    const dupFrames = frames.filter(function (frame) { return String(frame.name) === "ProbeDup"; });
+
+    const reopenedLabels = {
+      document: String(read(function () { return reopenedDocument.extractLabel(KEY); }, "")),
+      page: String(read(function () { return page.extractLabel(KEY); }, "")),
+      textFrameA: byName["ProbeUnique"] ?? null,
+      textFrameB: dupFrames.length >= 1
+        ? String(read(function () { return dupFrames[0].extractLabel(KEY); }, "")) : null,
+      textFrameC: dupFrames.length >= 2
+        ? String(read(function () { return dupFrames[1].extractLabel(KEY); }, "")) : null,
+      paragraphStyle: labelOfStyle(reopenedDocument.paragraphStyles, "Publisher Probe Labeled Body"),
+      characterStyle: labelOfStyle(reopenedDocument.characterStyles, "Publisher Probe Labeled Emphasis"),
+      objectStyle: labelOfStyle(reopenedDocument.objectStyles, "Publisher Probe Labeled Frame")
+    };
+    result.reopenedLabels = reopenedLabels;
+    result.pageFrameCount = frames.length;
+
+    const itemIds = [];
+    for (const item of items(page.pageItems)) {
+      itemIds.push({ name: String(item.name), id: read(function () { return item.id; }, null) });
+    }
+    result.pageItemIds = itemIds;
+    result.idsAfterReopen = {
+      document: read(function () { return reopenedDocument.id; }, null),
+      page: read(function () { return page.id; }, null)
+    };
+    result.styleValidAfterReopen = {
+      paragraph: read(function () {
+        return reopenedDocument.paragraphStyles.itemByName("Publisher Probe Labeled Body").isValid;
+      }, null),
+      character: read(function () {
+        return reopenedDocument.characterStyles.itemByName("Publisher Probe Labeled Emphasis").isValid;
+      }, null),
+      object: read(function () {
+        return reopenedDocument.objectStyles.itemByName("Publisher Probe Labeled Frame").isValid;
+      }, null)
+    };
+
+    const heroMatches = [];
+    const dupMatches = [];
+    for (const item of items(page.pageItems)) {
+      const value = String(read(function () { return item.extractLabel(KEY); }, ""));
+      if (value === "probe-hero-title") heroMatches.push(String(item.name));
+      if (value === "probe-dup-slot") dupMatches.push(String(item.name));
+    }
+    result.uniqueLabelMatchNames = heroMatches;
+    result.dupLabelMatchNames = dupMatches;
+
+    let labelsOk = true;
+    for (const field of Object.keys(EXPECTED_LABELS)) {
+      if (reopenedLabels[field] !== EXPECTED_LABELS[field]) labelsOk = false;
+    }
+    result.checks = {
+      labels: labelsOk,
+      uniqueLookup: heroMatches.length === 1 && heroMatches[0] === "ProbeUnique",
+      duplicateLookup: dupMatches.length === 2
+        && dupMatches.every(function (name) { return name === "ProbeDup"; })
+    };
+    result.success = result.checks.labels && result.checks.uniqueLookup && result.checks.duplicateLookup;
+  } catch (error) {
+    result.error = String(error && error.stack ? error.stack : error);
+  } finally {
+    if (reopenedDocument) {
+      try {
+        await settled(reopenedDocument.close(SaveOptions.NO));
+        result.reopenedDocumentClosed = true;
+      } catch (error) {
+        result.reopenedDocumentClosed = false;
+        result.closeError = String(error && error.stack ? error.stack : error);
+      }
+    } else {
+      result.reopenedDocumentClosed = false;
+    }
+    result.openDocumentCountAfter = app.documents.length;
+    result.success = result.success
+      && result.reopenedDocumentClosed
+      && result.openDocumentCountAfter === result.openDocumentCountBefore;
+    console.log("PUBLISHER_LABEL_REOPEN_PROBE_V4 " + JSON.stringify(result));
+  }
+})();

@@ -1,0 +1,106 @@
+const { app, SaveOptions } = require("indesign");
+
+// Phase 1 of the persistence claim: build a labeled scratch document, save it
+// non-interactively, and close without further prompts. Reopen verification is
+// the separate label-reopen-probe run. Both are host-local tooling paths, not
+// product code. The scratch folder must exist before the run.
+const KEY = "com.publisher.role";
+const SCRATCH_FILE = "/Users/lihaozhe/dev/indesign_tool/artifacts/host/indesign-21.0.0.192/label-persist/scratch-labels.indd";
+
+function read(readValue, fallback) {
+  try {
+    const value = readValue();
+    return value === undefined || value === null ? fallback : value;
+  } catch (_error) {
+    return fallback;
+  }
+}
+
+async function settled(value) {
+  return value && typeof value.then === "function" ? await value : value;
+}
+
+const result = {
+  probeVersion: 4,
+  capability: "script-labels-save",
+  hostVersion: String(app.version),
+  domVersion: String(app.scriptPreferences.version),
+  openDocumentCountBefore: app.documents.length,
+  scratchFile: SCRATCH_FILE,
+  success: false
+};
+
+(async function main() {
+  let scratchDocument;
+  try {
+    scratchDocument = await settled(app.documents.add());
+    const page = scratchDocument.pages.item(0);
+    const frameA = page.textFrames.add({ geometricBounds: [36, 36, 108, 300], contents: "A" });
+    const frameB = page.textFrames.add({ geometricBounds: [120, 36, 192, 300], contents: "B" });
+    const frameC = page.textFrames.add({ geometricBounds: [204, 36, 276, 300], contents: "C" });
+    frameA.name = "ProbeUnique";
+    frameB.name = "ProbeDup";
+    frameC.name = "ProbeDup";
+
+    const paragraphStyle = scratchDocument.paragraphStyles.add({ name: "Publisher Probe Labeled Body" });
+    const characterStyle = scratchDocument.characterStyles.add({ name: "Publisher Probe Labeled Emphasis" });
+    const objectStyle = scratchDocument.objectStyles.add({ name: "Publisher Probe Labeled Frame" });
+
+    scratchDocument.insertLabel(KEY, "probe-document");
+    page.insertLabel(KEY, "probe-page-article");
+    frameA.insertLabel(KEY, "probe-hero-title");
+    frameB.insertLabel(KEY, "probe-dup-slot");
+    frameC.insertLabel(KEY, "probe-dup-slot");
+    paragraphStyle.insertLabel(KEY, "probe-style-body");
+    characterStyle.insertLabel(KEY, "probe-style-emphasis");
+    objectStyle.insertLabel(KEY, "probe-style-frame");
+
+    result.labelsBeforeClose = {
+      document: String(read(function () { return scratchDocument.extractLabel(KEY); }, "")),
+      page: String(read(function () { return page.extractLabel(KEY); }, "")),
+      textFrameA: String(read(function () { return frameA.extractLabel(KEY); }, "")),
+      textFrameB: String(read(function () { return frameB.extractLabel(KEY); }, "")),
+      textFrameC: String(read(function () { return frameC.extractLabel(KEY); }, "")),
+      paragraphStyle: String(read(function () { return paragraphStyle.extractLabel(KEY); }, "")),
+      characterStyle: String(read(function () { return characterStyle.extractLabel(KEY); }, "")),
+      objectStyle: String(read(function () { return objectStyle.extractLabel(KEY); }, ""))
+    };
+    result.idsBeforeClose = {
+      document: read(function () { return scratchDocument.id; }, null),
+      page: read(function () { return page.id; }, null),
+      textFrameA: read(function () { return frameA.id; }, null),
+      textFrameB: read(function () { return frameB.id; }, null),
+      paragraphStyle: read(function () { return paragraphStyle.id; }, null),
+      characterStyle: read(function () { return characterStyle.id; }, null),
+      objectStyle: read(function () { return objectStyle.id; }, null)
+    };
+
+    await settled(scratchDocument.save(SCRATCH_FILE));
+    // Document.fullName was observed (2026-09-24) to return a Promise that
+    // never settles from a Scripts Panel run, so it must not be awaited or
+    // read here; the synchronous name is recorded instead and file presence
+    // is verified from the shell side.
+    result.nameAtSave = String(read(function () { return scratchDocument.name; }, ""));
+    result.modifiedAfterSave = read(function () { return scratchDocument.modified; }, null);
+    result.success = true;
+  } catch (error) {
+    result.error = String(error && error.stack ? error.stack : error);
+  } finally {
+    if (scratchDocument) {
+      try {
+        await settled(scratchDocument.close(SaveOptions.NO));
+        result.scratchDocumentClosed = true;
+      } catch (error) {
+        result.scratchDocumentClosed = false;
+        result.closeError = String(error && error.stack ? error.stack : error);
+      }
+    } else {
+      result.scratchDocumentClosed = false;
+    }
+    result.openDocumentCountAfter = app.documents.length;
+    result.success = result.success
+      && result.scratchDocumentClosed
+      && result.openDocumentCountAfter === result.openDocumentCountBefore;
+    console.log("PUBLISHER_LABEL_SAVE_PROBE_V4 " + JSON.stringify(result));
+  }
+})();

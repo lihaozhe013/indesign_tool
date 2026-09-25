@@ -6,12 +6,12 @@
 // in packages/indesign.
 
 import { execFileSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 
 function usage() {
-  console.error("usage: node scripts/run-indesign-probe.mjs <probe.idjs> --tag TAG [--app NAME] [--timeout SECONDS] [--out FILE]");
+  console.error("usage: node scripts/run-indesign-probe.mjs <probe.idjs> --tag TAG [--app NAME] [--timeout SECONDS] [--out FILE] [--cleanup PATH]...");
   process.exit(2);
 }
 
@@ -27,6 +27,7 @@ let tag;
 let outPath;
 let timeoutSeconds = 90;
 let appName = "Adobe InDesign 2026";
+const cleanupPaths = [];
 for (let i = 1; i < argv.length; i += 1) {
   const flag = argv[i];
   const value = argv[i + 1];
@@ -34,6 +35,7 @@ for (let i = 1; i < argv.length; i += 1) {
   else if (flag === "--out" && value !== undefined) outPath = value;
   else if (flag === "--timeout" && value !== undefined) timeoutSeconds = Number(value);
   else if (flag === "--app" && value !== undefined) appName = value;
+  else if (flag === "--cleanup" && value !== undefined) cleanupPaths.push(value);
   else {
     console.error("unexpected argument: " + flag);
     usage();
@@ -51,6 +53,16 @@ const probeSource = probePath.startsWith("/") ? probePath : join(process.cwd(), 
 if (!existsSync(probeSource)) {
   console.error("probe file not found: " + probeSource);
   process.exit(1);
+}
+
+// Persistence probes must start from a known-absent target: a re-run that has
+// to overwrite or race a previous scratch file makes the evidence ambiguous,
+// so callers pass the disposable target here.
+for (const target of cleanupPaths) {
+  if (existsSync(target)) {
+    rmSync(target);
+    console.error("removed stale target " + target);
+  }
 }
 
 function newestUxpLog() {

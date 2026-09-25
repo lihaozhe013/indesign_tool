@@ -1,0 +1,45 @@
+const { app, SaveOptions } = require("indesign");
+
+// Closes leaked scratch documents left open by a hung probe run. Only ever
+// touches documents whose name is in the scratch allowlist.
+const SCRATCH_NAMES = ["scratch-labels.indd"];
+
+function read(readValue, fallback) {
+  try {
+    const value = readValue();
+    return value === undefined || value === null ? fallback : value;
+  } catch (_error) {
+    return fallback;
+  }
+}
+
+function items(collection) {
+  const output = [];
+  for (let index = 0; index < collection.length; index += 1) {
+    output.push(typeof collection.item === "function" ? collection.item(index) : collection[index]);
+  }
+  return output;
+}
+
+const closed = [];
+const remaining = [];
+for (const doc of items(app.documents)) {
+  const name = String(read(function () { return doc.name; }, ""));
+  if (SCRATCH_NAMES.indexOf(name) < 0) {
+    remaining.push(name);
+    continue;
+  }
+  try {
+    doc.close(SaveOptions.NO);
+    closed.push(name);
+  } catch (error) {
+    remaining.push(name + ":" + String(error && error.message ? error.message : error));
+  }
+}
+console.log("PUBLISHER_CLEANUP_SCRATCH_V1 " + JSON.stringify({
+  probeVersion: 1,
+  capability: "close-leaked-scratch-documents",
+  closed: closed,
+  remaining: remaining,
+  openDocumentCountAfter: app.documents.length
+}));

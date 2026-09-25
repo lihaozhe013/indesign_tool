@@ -1,0 +1,37 @@
+const { app } = require("indesign");
+
+// Read-only inspection of open documents, for diagnosing host runs. Never
+// reads Document.fullName: that property returns a Promise that never
+// settles from Scripts Panel executions (observed 2026-09-24).
+
+function read(readValue, fallback) {
+  try {
+    const value = readValue();
+    return value === undefined || value === null ? fallback : value;
+  } catch (_error) {
+    return fallback;
+  }
+}
+
+function items(collection) {
+  const output = [];
+  for (let index = 0; index < collection.length; index += 1) {
+    output.push(typeof collection.item === "function" ? collection.item(index) : collection[index]);
+  }
+  return output;
+}
+
+const docs = [];
+for (const doc of items(app.documents)) {
+  docs.push({
+    name: String(read(function () { return doc.name; }, "")),
+    saved: read(function () { return doc.saved; }, null),
+    modified: read(function () { return doc.modified; }, null)
+  });
+}
+console.log("PUBLISHER_OPEN_DOCUMENTS_V1 " + JSON.stringify({
+  probeVersion: 1,
+  capability: "list-open-documents",
+  count: app.documents.length,
+  docs: docs
+}));
