@@ -10,14 +10,14 @@ const ROLE_KEY = "com.publisher.role";
 const TEMPLATE_PATH = "/Users/lihaozhe/dev/indesign_tool/artifacts/host/indesign-21.0.0.192/templates/synthetic-cover-article.indd";
 
 const PARAGRAPH_STYLES = [
-  { name: "Article / H1", role: "style-h1" },
-  { name: "Article / H2", role: "style-h2" },
-  { name: "Article / Body", role: "style-body" },
-  { name: "Article / Quote", role: "style-quote" },
-  { name: "Article / Caption", role: "style-caption" }
+  { name: "Article / H1", role: "ArticleTitle" },
+  { name: "Article / H2", role: "SectionHeading" },
+  { name: "Article / Body", role: "Body" },
+  { name: "Article / Quote", role: "Quote" },
+  { name: "Article / Caption", role: "Caption" }
 ];
-const CHARACTER_STYLES = [{ name: "Article / Emphasis", role: "style-emphasis" }];
-const OBJECT_STYLES = [{ name: "Article / ImageFrame", role: "style-image-frame" }];
+const CHARACTER_STYLES = [{ name: "Article / Emphasis", role: "Emphasis" }];
+const OBJECT_STYLES = [{ name: "Article / ImageFrame", role: "HeroImage" }];
 
 function read(readValue, fallback) {
   try {
@@ -41,7 +41,7 @@ async function settled(value) {
 }
 
 const result = {
-  probeVersion: 3,
+  probeVersion: 4,
   capability: "synthetic-cover-article-template",
   hostVersion: String(app.version),
   domVersion: String(app.scriptPreferences.version),
@@ -112,11 +112,11 @@ const result = {
       geometricBounds: [coverBounds[0] + 20, coverBounds[1] + 20, coverBounds[0] + 80, coverBounds[3] - 20]
     });
     heroImage.insertLabel(ROLE_KEY, "hero-image");
-    coverPage.insertLabel(ROLE_KEY, "page-cover");
+    coverPage.insertLabel(ROLE_KEY, "Cover");
 
     const articlePage = scratchDocument.pages.add();
     articlePage.appliedMaster = articleMaster;
-    articlePage.insertLabel(ROLE_KEY, "page-article");
+    articlePage.insertLabel(ROLE_KEY, "Article");
 
     for (const definition of PARAGRAPH_STYLES) {
       const style = scratchDocument.paragraphStyles.add({ name: definition.name });
@@ -173,8 +173,8 @@ const result = {
     await settled(scratchDocument.save(TEMPLATE_PATH));
     result.savedName = String(read(function () { return scratchDocument.name; }, ""));
 
-    const requiredRoles = ["article-flow", "page-number", "hero-title", "hero-image", "page-cover", "page-article",
-      "style-h1", "style-h2", "style-body", "style-quote", "style-caption", "style-emphasis", "style-image-frame"];
+    const requiredRoles = ["article-flow", "page-number", "hero-title", "hero-image", "Cover", "Article",
+      "ArticleTitle", "SectionHeading", "Body", "Quote", "Caption", "Emphasis", "HeroImage"];
     const foundRoles = roleLabels.map(function (entry) { return entry.role; });
     result.missingRoles = requiredRoles.filter(function (role) { return foundRoles.indexOf(role) < 0; });
     result.checks = {
@@ -204,6 +204,6 @@ const result = {
       && result.scratchDocumentClosed
       && (result.openDocumentCountImmediate === result.openDocumentCountBefore
         || result.openDocumentCountImmediate === result.openDocumentCountBefore + 1);
-    console.log("PUBLISHER_SYNTHETIC_TEMPLATE_PROBE_V3 " + JSON.stringify(result));
+    console.log("PUBLISHER_SYNTHETIC_TEMPLATE_PROBE_V4 " + JSON.stringify(result));
   }
 })();
