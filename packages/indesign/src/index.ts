@@ -12,6 +12,8 @@ import type {
   TemplateInventory
 } from "@publisher/contracts";
 
+export * from "./materialize.js";
+
 export interface IndesignDriver {
   inspectTemplate(templatePath: string): Promise<TemplateInventory>;
   render(input: {
