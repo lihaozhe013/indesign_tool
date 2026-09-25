@@ -14,6 +14,7 @@ Status checked on 2026-09-24:
 - The paragraph-style scratch-document probe passed: it created and applied `Publisher Probe Body`, read it back, closed without saving, and restored the open-document count from 1 to 1.
 - The character-style scratch-document probe passed: it created and applied `Publisher Probe Emphasis`, read the applied style back, closed without saving, and restored the open-document count from 1 to 1. Two independent runs on 2026-09-24 produced the same passing record. In-memory only; save/reopen persistence is a separate probe.
 - The script-label probes passed in memory and across a separate save/close/reopen run: namespaced labels on document, page, text-frame, and style objects persist, and label-value lookup is reliable for both unique and duplicate matches. ADR 0003 is decided: `com.publisher.role` labels are the annotation mechanism; the sidecar fallback is rejected. Host hazards (`fullName` never settles, `getByName` does not exist, leaked hung probes corrupt counts) are recorded in the probe guide.
+- Story-flow, page, overset, and structure-persistence probes passed: `\r`/`\n` separator semantics, story creation through frames, two-frame threading with a shared parent story, overset clearing after added capacity with no text loss, parent-page assignment/add/duplicate, parent-frame adoption by `override`, and a full save/reopen that kept pages, master, adopted frame, threaded story, and named styles with stable ids. Frame ownership follows geometric bounds, so geometry must come from the target page.
 - The report is an inspection sample, not the initial publishing template. Do not force its 261 independent stories into the single main-article-story model.
 
 Host probe evidence and procedures are in [the InDesign probe guide](indesign-probes/README.md). Local host artifacts live under the ignored `artifacts/host/indesign-21.0.0.192/` directory. Do not commit the designer's `.indd`, IDML, PDF, fonts, or linked assets.
@@ -30,17 +31,9 @@ Probe execution is now automated: `scripts/run-indesign-probe.mjs` runs a `.idjs
 
 Labels round-trip in memory on document, page, text-frame, and paragraph/character/object-style objects with the key `com.publisher.role`; unset keys read `""`; a second key is isolated. A labeled scratch document saved by string path, closed, and reopened in a separate run preserved every label, and label-value lookup returned correct unique and duplicate matches. `Page.id`/`PageItem.id` were stable across reopen while `Document.id` was session-local. ADR 0003 now selects keyed script labels; the object-name sidecar fallback is rejected. See the probe guide for the failed attempt 1 (`getByName`), the invalidated attempt 2 (leaked open document), and the resulting probe-hygiene rules. Do not change the real report source.
 
-### 3. Verify native story flow and page operations
+### 3. Verify native story flow and page operations (done 2026-09-24)
 
-Use minimal scratch documents and separate probes for each capability:
-
-1. Create one story, populate it with Chinese and mixed-language text, and verify contents.
-2. Thread two text frames and read back the previous/next frame chain.
-3. Force overset with a deliberately small frame, then add flow capacity and confirm InDesign recomposes the story without losing source text.
-4. Assign a parent page and duplicate/add an article page; record page counts and parent identity.
-5. Save, close, reopen, and verify the resulting structure in a separate persistence probe.
-
-Prefer native stories, threaded frames, paragraph styles, parent pages, and overset reporting. Do not estimate line breaks in the publishing core.
+Independent probes passed for each capability. Paragraph separators are `\r` and `\n` is a soft line break; `paragraph.contents` carries the trailing `\r` except on the last paragraph. A text frame creates a story, and `nextTextFrame` links frames into one shared `parentStory` with `textContainers` in order. A deliberately small frame oversets (`overflows === true`) without losing text and clears after threading a second frame. Parent-page assignment, page add, and page duplicate work, `pageItem.override(page)` adopts a labeled parent frame onto a page, and parent items are found through document/master enumeration rather than the applied page's own collections. A structure save/reopen pair preserved pages, master, adopted frame, threaded story, and named styles with stable ids. Frame ownership follows geometric bounds, so the adapter must derive frame geometry from the target page.
 
 ### 4. Verify image, object-style, and export behavior
 
