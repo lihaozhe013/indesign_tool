@@ -1,0 +1,145 @@
+const { app, SaveOptions } = require("indesign");
+
+// Phase 1 of the structure-persistence claim: build a realistic scratch
+// document (parent-page flow frame adopted on an article page, a threaded
+// main story with named styles) and save it non-interactively. Phase 2 is
+// structure-reopen-probe.idjs, run separately. Host-local tooling.
+const ROLE_KEY = "com.publisher.role";
+const SCRATCH_FILE = "/Users/lihaozhe/dev/indesign_tool/artifacts/host/indesign-21.0.0.192/structure-persist/scratch-structure.indd";
+const PARAGRAPH_TEXT = [
+  "结构持久化第一段：中文内容与 English 混排。",
+  "结构持久化第二段：用于验证样式与串接关系在重开后保持。",
+  "结构持久化第三段：结束。"
+];
+const STRUCTURE_TEXT = PARAGRAPH_TEXT.join("\r");
+
+function read(readValue, fallback) {
+  try {
+    const value = readValue();
+    return value === undefined || value === null ? fallback : value;
+  } catch (_error) {
+    return fallback;
+  }
+}
+
+async function settled(value) {
+  return value && typeof value.then === "function" ? await value : value;
+}
+
+const result = {
+  probeVersion: 5,
+  capability: "structure-save",
+  hostVersion: String(app.version),
+  domVersion: String(app.scriptPreferences.version),
+  openDocumentCountBefore: app.documents.length,
+  scratchFile: SCRATCH_FILE,
+  success: false
+};
+
+(async function main() {
+  let scratchDocument;
+  try {
+    scratchDocument = await settled(app.documents.add());
+    const masterSpread = scratchDocument.masterSpreads.item(0);
+    const masterPage = masterSpread.pages.item(masterSpread.pages.length - 1);
+    const parentFlow = masterPage.textFrames.add({ geometricBounds: [36, 36, 300, 400] });
+    parentFlow.contents = "Parent page frame text";
+    parentFlow.insertLabel(ROLE_KEY, "probe-parent-article-flow");
+
+    const paragraphStyle = scratchDocument.paragraphStyles.add({ name: "Publisher Structure Body" });
+    const characterStyle = scratchDocument.characterStyles.add({ name: "Publisher Structure Emphasis" });
+    paragraphStyle.insertLabel(ROLE_KEY, "probe-style-body");
+    characterStyle.insertLabel(ROLE_KEY, "probe-style-emphasis");
+
+    const articlePage = scratchDocument.pages.item(0);
+    articlePage.appliedMaster = masterSpread;
+    const adoptedFlow = parentFlow.override(articlePage);
+    // Frame geometry decides page ownership, and facing-page spreads use
+    // negative x for left pages; derive bounds from the target page instead of
+    // assuming page-relative coordinates, or frames land on the pasteboard.
+    const pageBounds = read(function () { return articlePage.bounds; }, null);
+    result.articlePageBounds = pageBounds;
+    const top = pageBounds[0] + 36;
+    const left = pageBounds[1] + 36;
+    const right = pageBounds[3] - 36;
+    const flowFrameA = articlePage.textFrames.add({ geometricBounds: [top, left, top + 120, right] });
+    const flowFrameB = articlePage.textFrames.add({ geometricBounds: [top + 140, left, top + 220, right] });
+    flowFrameA.nextTextFrame = flowFrameB;
+
+    const nextPage = scratchDocument.pages.add();
+    nextPage.appliedMaster = masterSpread;
+
+    flowFrameA.contents = STRUCTURE_TEXT;
+    const story = flowFrameA.parentStory;
+    for (let index = 0; index < story.paragraphs.length; index += 1) {
+      story.paragraphs.item(index).applyParagraphStyle(paragraphStyle, true);
+    }
+    story.paragraphs.item(1).applyCharacterStyle(characterStyle);
+
+    result.saved = {
+      pageCount: scratchDocument.pages.length,
+      masterSpreadName: String(read(function () { return masterSpread.name; }, "")),
+      masterSpreadId: read(function () { return masterSpread.id; }, null),
+      articlePageId: read(function () { return articlePage.id; }, null),
+      nextPageId: read(function () { return nextPage.id; }, null),
+      articlePageAppliedMasterId: read(function () { return articlePage.appliedMaster.id; }, null),
+      adoptedFlowId: read(function () { return adoptedFlow.id; }, null),
+      adoptedFlowParentPageId: read(function () { return adoptedFlow.parentPage.id; }, null),
+      adoptedFlowLabel: String(read(function () { return adoptedFlow.extractLabel(ROLE_KEY); }, "")),
+      flowFrameAId: read(function () { return flowFrameA.id; }, null),
+      flowFrameBId: read(function () { return flowFrameB.id; }, null),
+      flowFrameAParentPageId: read(function () { return flowFrameA.parentPage.id; }, null),
+      flowFrameBParentPageId: read(function () { return flowFrameB.parentPage.id; }, null),
+      pageIds: [read(function () { return articlePage.id; }, null), read(function () { return nextPage.id; }, null)],
+      nextPageAppliedMasterId: read(function () { return nextPage.appliedMaster.id; }, null),
+      flowNextFrameId: read(function () { return flowFrameA.nextTextFrame.id; }, null),
+      storyId: read(function () { return story.id; }, null),
+      paragraphStyleId: read(function () { return paragraphStyle.id; }, null),
+      characterStyleId: read(function () { return characterStyle.id; }, null),
+      storyContents: String(story.contents),
+      paragraphCount: story.paragraphs.length,
+      paragraphStyleNames: story.paragraphs.length > 0
+        ? [String(read(function () { return story.paragraphs.item(0).appliedParagraphStyle.name; }, "")),
+           String(read(function () { return story.paragraphs.item(1).appliedParagraphStyle.name; }, ""))]
+        : [],
+      characterStyleName: String(read(function () {
+        return story.paragraphs.item(1).characters.item(0).appliedCharacterStyle.name;
+      }, "")),
+      overflows: read(function () { return story.overflows; }, null)
+    };
+
+    await settled(scratchDocument.save(SCRATCH_FILE));
+    result.nameAtSave = String(read(function () { return scratchDocument.name; }, ""));
+    result.success = result.saved.storyContents === STRUCTURE_TEXT
+      && result.saved.flowNextFrameId === result.saved.flowFrameBId
+      && result.saved.paragraphStyleNames.length === 2
+      && result.saved.paragraphStyleNames[0] === "Publisher Structure Body"
+      && result.saved.characterStyleName === "Publisher Structure Emphasis";
+  } catch (error) {
+    result.error = String(error && error.stack ? error.stack : error);
+  } finally {
+    if (scratchDocument) {
+      try {
+        await settled(scratchDocument.close(SaveOptions.NO));
+        result.scratchDocumentClosed = true;
+      } catch (error) {
+        result.scratchDocumentClosed = false;
+        result.closeError = String(error && error.stack ? error.stack : error);
+      }
+    } else {
+      result.scratchDocumentClosed = false;
+    }
+    result.openDocumentCountImmediate = app.documents.length;
+    // save() behaves like save-as: the count can transiently include the new
+    // copy that InDesign finalizes on its own. Timers do not fire inside a
+    // Scripts Panel execution, so this cannot be waited out in-script; the
+    // one-extra-document case is recorded and re-checked with the
+    // open-documents probe afterwards.
+    result.countResiduePossible = result.openDocumentCountImmediate !== result.openDocumentCountBefore;
+    result.success = result.success
+      && result.scratchDocumentClosed
+      && (result.openDocumentCountImmediate === result.openDocumentCountBefore
+        || result.openDocumentCountImmediate === result.openDocumentCountBefore + 1);
+    console.log("PUBLISHER_STRUCTURE_SAVE_PROBE_V5 " + JSON.stringify(result));
+  }
+})();

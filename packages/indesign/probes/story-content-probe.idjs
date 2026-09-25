@@ -1,0 +1,111 @@
+const { app, SaveOptions } = require("indesign");
+
+// One capability: create stories through text frames, populate them with
+// Chinese and mixed-language text, and read the composed text back. Attempt 1
+// proved "\n" becomes a soft line break (code 10) and does not split
+// paragraphs; this version records "\r" paragraph separators as well so the
+// adapter's text writer can be built on observed normalization.
+const PARAGRAPH_TEXT = [
+  "第一段中文内容，包含全角标点：“引号”、（括号）与省略号……",
+  "第二段 mixed 中文与 English text, with ASCII punctuation and 1234.",
+  "第三段：为什么我们最后用了某个工具？"
+];
+const PARAGRAPH_SOURCE = PARAGRAPH_TEXT.join("\r");
+const LINE_BREAK_SOURCE = "上半行\n下半行";
+
+function read(readValue, fallback) {
+  try {
+    const value = readValue();
+    return value === undefined || value === null ? fallback : value;
+  } catch (_error) {
+    return fallback;
+  }
+}
+
+function separatorCodes(text) {
+  const codes = [];
+  for (const character of String(text)) {
+    const code = character.codePointAt(0);
+    if (code < 32 || code === 0x2028 || code === 0x2029 || code === 8233) codes.push(code);
+  }
+  return codes;
+}
+
+const result = {
+  probeVersion: 3,
+  capability: "story-content-write-and-readback",
+  hostVersion: String(app.version),
+  domVersion: String(app.scriptPreferences.version),
+  openDocumentCountBefore: app.documents.length,
+  paragraphSourceCodes: separatorCodes(PARAGRAPH_SOURCE),
+  lineBreakSourceCodes: separatorCodes(LINE_BREAK_SOURCE),
+  success: false
+};
+
+let scratchDocument;
+
+try {
+  scratchDocument = app.documents.add();
+  const page = scratchDocument.pages.item(0);
+
+  const paragraphFrame = page.textFrames.add({ geometricBounds: [36, 36, 220, 400] });
+  paragraphFrame.contents = PARAGRAPH_SOURCE;
+  const paragraphStory = paragraphFrame.parentStory;
+  const paragraphContents = [];
+  for (let index = 0; index < paragraphStory.paragraphs.length; index += 1) {
+    paragraphContents.push(String(paragraphStory.paragraphs.item(index).contents));
+  }
+  result.paragraphFrame = {
+    paragraphCount: paragraphStory.paragraphs.length,
+    paragraphs: paragraphContents,
+    storySeparatorCodes: separatorCodes(paragraphStory.contents),
+    storyLength: paragraphStory.characters.length
+  };
+
+  const lineBreakFrame = page.textFrames.add({ geometricBounds: [240, 36, 320, 400] });
+  lineBreakFrame.contents = LINE_BREAK_SOURCE;
+  const lineBreakStory = lineBreakFrame.parentStory;
+  result.lineBreakFrame = {
+    paragraphCount: lineBreakStory.paragraphs.length,
+    firstParagraphContents: String(lineBreakStory.paragraphs.item(0).contents),
+    storySeparatorCodes: separatorCodes(lineBreakStory.contents)
+  };
+
+  result.storiesInDocument = scratchDocument.stories.length;
+  // Observed in attempt 2: paragraph.contents includes the trailing paragraph
+  // mark ("\r") for every paragraph except the last.
+  const expectedRawContents = PARAGRAPH_TEXT.map(function (text, index) {
+    return index < PARAGRAPH_TEXT.length - 1 ? text + "\r" : text;
+  });
+  result.expectedRawParagraphContents = expectedRawContents;
+  const firstRaw = String(paragraphStory.paragraphs.item(0).contents);
+  const lastRaw = String(paragraphStory.paragraphs.item(paragraphStory.paragraphs.length - 1).contents);
+  result.paragraphMarkIncluded = firstRaw.charCodeAt(firstRaw.length - 1) === 13
+    && lastRaw.charCodeAt(lastRaw.length - 1) !== 13;
+  result.paragraphsMatch = result.paragraphFrame.paragraphCount === PARAGRAPH_TEXT.length
+    && paragraphContents.length === PARAGRAPH_TEXT.length
+    && paragraphContents.every(function (text, index) { return text === expectedRawContents[index]; });
+  result.success = result.paragraphsMatch
+    && result.lineBreakFrame.paragraphCount === 1
+    && result.lineBreakFrame.firstParagraphContents === LINE_BREAK_SOURCE
+    && result.storiesInDocument === 2;
+} catch (error) {
+  result.error = String(error && error.stack ? error.stack : error);
+} finally {
+  if (scratchDocument) {
+    try {
+      scratchDocument.close(SaveOptions.NO);
+      result.scratchDocumentClosed = true;
+    } catch (error) {
+      result.scratchDocumentClosed = false;
+      result.closeError = String(error && error.stack ? error.stack : error);
+    }
+  } else {
+    result.scratchDocumentClosed = false;
+  }
+  result.openDocumentCountAfter = app.documents.length;
+  result.success = result.success
+    && result.scratchDocumentClosed
+    && result.openDocumentCountAfter === result.openDocumentCountBefore;
+  console.log("PUBLISHER_STORY_CONTENT_PROBE_V3 " + JSON.stringify(result));
+}

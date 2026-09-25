@@ -1,0 +1,109 @@
+const { app, SaveOptions } = require("indesign");
+
+// One capability: link two text frames into one story and read the chain
+// back. Records the previous/next frame relationship, shared story identity,
+// and how composed text distributes across the frames.
+const STORY_TEXT = [
+  "第一部分：串接文本的第一段，包含中文与 English。",
+  "第二部分：第二段继续，用于观察文本如何流过两个文本框。",
+  "第三部分：结束段，确认文本没有被丢失。"
+].join("\r");
+
+function read(readValue, fallback) {
+  try {
+    const value = readValue();
+    return value === undefined || value === null ? fallback : value;
+  } catch (_error) {
+    return fallback;
+  }
+}
+
+function items(collection) {
+  const output = [];
+  for (let index = 0; index < collection.length; index += 1) {
+    output.push(typeof collection.item === "function" ? collection.item(index) : collection[index]);
+  }
+  return output;
+}
+
+const result = {
+  probeVersion: 1,
+  capability: "story-threading-two-frames",
+  hostVersion: String(app.version),
+  domVersion: String(app.scriptPreferences.version),
+  openDocumentCountBefore: app.documents.length,
+  success: false
+};
+
+let scratchDocument;
+
+try {
+  scratchDocument = app.documents.add();
+  const page = scratchDocument.pages.item(0);
+  const frameA = page.textFrames.add({ geometricBounds: [36, 36, 120, 400] });
+  const frameB = page.textFrames.add({ geometricBounds: [140, 36, 224, 400] });
+
+  frameA.nextTextFrame = frameB;
+  frameA.contents = STORY_TEXT;
+  const story = frameA.parentStory;
+
+  const nextId = read(function () { return frameA.nextTextFrame.id; }, null);
+  const previousId = read(function () { return frameB.previousTextFrame.id; }, null);
+  const frameAId = read(function () { return frameA.id; }, null);
+  const frameBId = read(function () { return frameB.id; }, null);
+  const storyAId = read(function () { return frameA.parentStory.id; }, null);
+  const storyBId = read(function () { return frameB.parentStory.id; }, null);
+
+  result.frames = {
+    textFrameCount: page.textFrames.length,
+    frameAId: frameAId,
+    frameBId: frameBId,
+    nextTextFrameId: nextId,
+    previousTextFrameId: previousId
+  };
+
+  const looseFrame = page.textFrames.add({ geometricBounds: [244, 36, 300, 400] });
+  result.looseFrameHasNextTextFrame = read(function () { return looseFrame.nextTextFrame === null; }, null);
+  result.story = {
+    storyAId: storyAId,
+    storyBId: storyBId,
+    sharedStory: storyAId !== null && storyAId === storyBId,
+    paragraphCount: story.paragraphs.length,
+    storyContents: String(story.contents),
+    textContainerCount: read(function () { return story.textContainers.length; }, null),
+    frameAComposed: String(read(function () { return frameA.contents; }, "")),
+    frameBComposed: String(read(function () { return frameB.contents; }, ""))
+  };
+  result.overflows = read(function () { return story.overflows; }, null);
+  result.textPreserved = String(story.contents) === STORY_TEXT;
+
+  result.checks = {
+    forwardLink: nextId !== null && nextId === frameBId,
+    backwardLink: previousId !== null && previousId === frameAId,
+    sharedStory: result.story.sharedStory,
+    textPreserved: result.textPreserved
+  };
+  result.success = result.checks.forwardLink
+    && result.checks.backwardLink
+    && result.checks.sharedStory
+    && result.checks.textPreserved;
+} catch (error) {
+  result.error = String(error && error.stack ? error.stack : error);
+} finally {
+  if (scratchDocument) {
+    try {
+      scratchDocument.close(SaveOptions.NO);
+      result.scratchDocumentClosed = true;
+    } catch (error) {
+      result.scratchDocumentClosed = false;
+      result.closeError = String(error && error.stack ? error.stack : error);
+    }
+  } else {
+    result.scratchDocumentClosed = false;
+  }
+  result.openDocumentCountAfter = app.documents.length;
+  result.success = result.success
+    && result.scratchDocumentClosed
+    && result.openDocumentCountAfter === result.openDocumentCountBefore;
+  console.log("PUBLISHER_THREADING_PROBE_V1 " + JSON.stringify(result));
+}

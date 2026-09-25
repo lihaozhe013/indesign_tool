@@ -1,0 +1,135 @@
+const { app, SaveOptions } = require("indesign");
+
+// One capability: locate a labeled template frame that lives on a parent
+// (master) page and adopt it onto a document page.
+//
+// Findings folded in here: a text frame added to a two-page master spread is
+// placed by its geometric bounds, so positive-x bounds land on the right-hand
+// master page even when the call targets the left page object. Parent items
+// are not listed by the applied page's own pageItems/textFrames; they are
+// discoverable through document/master page-item enumeration, and
+// pageItem.override(page) moves a labeled copy onto the target page.
+const ROLE_KEY = "com.publisher.role";
+const PARENT_FRAME_ROLE = "probe-parent-article-flow";
+
+function read(readValue, fallback) {
+  try {
+    const value = readValue();
+    return value === undefined || value === null ? fallback : value;
+  } catch (_error) {
+    return fallback;
+  }
+}
+
+function items(collection) {
+  const output = [];
+  for (let index = 0; index < collection.length; index += 1) {
+    output.push(typeof collection.item === "function" ? collection.item(index) : collection[index]);
+  }
+  return output;
+}
+
+function findRoleFrames(frames, role) {
+  return items(frames).filter(function (frame) {
+    return String(read(function () { return frame.extractLabel(ROLE_KEY); }, "")) === role;
+  });
+}
+
+const result = {
+  probeVersion: 4,
+  capability: "parent-page-frame-discovery-and-adoption",
+  hostVersion: String(app.version),
+  domVersion: String(app.scriptPreferences.version),
+  openDocumentCountBefore: app.documents.length,
+  success: false
+};
+
+let scratchDocument;
+
+try {
+  scratchDocument = app.documents.add();
+  const masterSpread = scratchDocument.masterSpreads.item(0);
+  const masterPageIds = items(masterSpread.pages).map(function (page) {
+    return read(function () { return page.id; }, null);
+  });
+  const masterPage = masterSpread.pages.item(masterSpread.pages.length - 1);
+  const parentFrame = masterPage.textFrames.add({ geometricBounds: [36, 36, 300, 400] });
+  parentFrame.contents = "Parent page frame text";
+  parentFrame.insertLabel(ROLE_KEY, PARENT_FRAME_ROLE);
+
+  const frameParentPageId = read(function () { return parentFrame.parentPage.id; }, null);
+  result.masterIdentity = {
+    masterSpreadId: read(function () { return masterSpread.id; }, null),
+    masterPageIds: masterPageIds,
+    requestedMasterPageId: read(function () { return masterPage.id; }, null),
+    frameId: read(function () { return parentFrame.id; }, null),
+    frameParentPageId: frameParentPageId,
+    frameLandedOnMasterSpread: masterPageIds.indexOf(frameParentPageId) >= 0
+  };
+  result.discovery = {
+    masterSpreadPageItemCount: read(function () { return masterSpread.pageItems.length; }, null),
+    documentRoleFrameCount: findRoleFrames(scratchDocument.allPageItems, PARENT_FRAME_ROLE).length,
+    discoveredParentPageId: read(function () {
+      return findRoleFrames(scratchDocument.allPageItems, PARENT_FRAME_ROLE)[0].parentPage.id;
+    }, null)
+  };
+
+  const newPage = scratchDocument.pages.add();
+  newPage.appliedMaster = masterSpread;
+  result.appliedPageOwnItems = {
+    pageItemCount: newPage.pageItems.length,
+    textFrameCount: newPage.textFrames.length
+  };
+
+  const overridden = parentFrame.override(newPage);
+  result.adoption = {
+    overriddenFrameId: read(function () { return overridden.id; }, null),
+    overriddenParentPageId: read(function () { return overridden.parentPage.id; }, null),
+    targetPageId: read(function () { return newPage.id; }, null),
+    label: String(read(function () { return overridden.extractLabel(ROLE_KEY); }, "")),
+    contents: String(read(function () { return overridden.contents; }, "")),
+    pageRoleFrameCount: findRoleFrames(newPage.textFrames, PARENT_FRAME_ROLE).length
+  };
+
+  const duplicate = newPage.duplicate();
+  result.duplicatePage = {
+    appliedMasterMatches: read(function () { return duplicate.appliedMaster.id; }, null)
+      === read(function () { return masterSpread.id; }, null),
+    roleFrameCount: findRoleFrames(duplicate.textFrames, PARENT_FRAME_ROLE).length,
+    pageCount: scratchDocument.pages.length
+  };
+
+  result.checks = {
+    parentFrameLandsOnMasterSpread: result.masterIdentity.frameLandedOnMasterSpread,
+    discoverableThroughDocumentItems: result.discovery.documentRoleFrameCount === 1
+      && masterPageIds.indexOf(result.discovery.discoveredParentPageId) >= 0,
+    appliedPageDoesNotOwnParentItems: result.appliedPageOwnItems.pageItemCount === 0,
+    adoptionKeepsIdentity: result.adoption.overriddenParentPageId === result.adoption.targetPageId
+      && result.adoption.pageRoleFrameCount === 1
+      && result.adoption.label === PARENT_FRAME_ROLE
+      && result.adoption.contents === "Parent page frame text",
+    duplicateKeepsMasterAndAdoptedFrame: result.duplicatePage.appliedMasterMatches === true
+      && result.duplicatePage.roleFrameCount === 1
+      && result.duplicatePage.pageCount === 3
+  };
+  result.success = Object.keys(result.checks).every(function (key) { return result.checks[key] === true; });
+} catch (error) {
+  result.error = String(error && error.stack ? error.stack : error);
+} finally {
+  if (scratchDocument) {
+    try {
+      scratchDocument.close(SaveOptions.NO);
+      result.scratchDocumentClosed = true;
+    } catch (error) {
+      result.scratchDocumentClosed = false;
+      result.closeError = String(error && error.stack ? error.stack : error);
+    }
+  } else {
+    result.scratchDocumentClosed = false;
+  }
+  result.openDocumentCountAfter = app.documents.length;
+  result.success = result.success
+    && result.scratchDocumentClosed
+    && result.openDocumentCountAfter === result.openDocumentCountBefore;
+  console.log("PUBLISHER_PARENT_PAGE_PROBE_V4 " + JSON.stringify(result));
+}
