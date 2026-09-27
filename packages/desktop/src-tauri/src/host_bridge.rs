@@ -176,7 +176,7 @@ fn format_apple_event_failure(context: &str, detail: &str) -> String {
     let normalized = detail.to_ascii_lowercase();
     if normalized.contains("-1743") || normalized.contains("not authorized to send apple events") {
         format!(
-            "InDesign control permission was denied. In System Settings > Privacy & Security > Automation, allow Structured Publisher to control Adobe InDesign 2026, then refresh the connection. ({detail})"
+            "InDesign control permission was denied. In System Settings > Privacy & Security > Automation, allow Folio to control Adobe InDesign 2026, then refresh the connection. ({detail})"
         )
     } else {
         format!("{context}: {}", detail.trim())
@@ -224,6 +224,7 @@ mod tests {
         );
         assert!(error.contains("Privacy & Security > Automation"));
         assert!(error.contains("Adobe InDesign 2026"));
+        assert!(error.contains("allow Folio to control"));
     }
 
     #[test]

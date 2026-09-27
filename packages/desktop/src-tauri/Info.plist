@@ -3,6 +3,6 @@
 <plist version="1.0">
   <dict>
     <key>NSAppleEventsUsageDescription</key>
-    <string>Structured Publisher sends InDesign scripts to inspect templates, create documents, and export proofs.</string>
+    <string>Folio sends InDesign scripts to inspect templates, create documents, and export proofs.</string>
   </dict>
 </plist>

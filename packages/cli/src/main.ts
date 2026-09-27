@@ -154,7 +154,7 @@ function usageError(usage: string): void {
 
 function printHelp(): void {
   process.stdout.write([
-    "Structured Publishing Toolkit",
+    "Folio Publishing Toolkit",
     "",
     "Commands:",
     "  publisher article parse <article.md>",

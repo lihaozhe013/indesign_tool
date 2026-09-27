@@ -23,8 +23,10 @@ The legacy InDesign panel source remains in `packages/plugin` for reference, but
 - Follow [the host testing procedure](docs/testing.md) and [InDesign probe evidence](docs/indesign-probes/README.md) for host-backed work.
 - The current ignored synthetic `.indd` and its scan result predate the latest generator revision. Regenerate with `packages/indesign/probes/synthetic-template-probe.idjs` and verify its recorded role inventory before using it. Keep host documents and acceptance outputs under ignored `artifacts/host/`; do not commit them.
 
-## Agent documentation
+## Documentation
 
-Repository documentation is for agent handoff, architecture decisions, verification, or host evidence. Keep it in English, update status claims when evidence changes, and remove stale or redundant material instead of adding end-user guides.
+Keep agent handoff, architecture, verification, and host-evidence documentation in English. Update status claims when evidence changes, and remove stale or redundant material.
+
+The maintained Chinese user manual at [docs/user-manual.zh-CN.md](docs/user-manual.zh-CN.md) is an explicit product requirement. Keep its workflow and InDesign template instructions aligned with the shipped app; the native Help menu links to its GitHub page.
 
 Start with [the desktop implementation plan](docs/implementation-plan.md) for architecture, [the next steps](docs/next-steps.md) for current acceptance status, and the linked testing and probe documents for verification. Accepted design constraints are recorded in `docs/decisions/`.

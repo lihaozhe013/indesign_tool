@@ -14,7 +14,7 @@ The default validation does not require Adobe software. TypeScript/Vitest cover 
 The desktop build checks Vite output, Tauri configuration, the macOS bundle metadata, and the Apple Events usage description. On macOS, verify the built app bundle signature with:
 
 ```bash
-codesign --verify --deep --strict "packages/desktop/src-tauri/target/release/bundle/macos/Structured Publisher.app"
+codesign --verify --deep --strict "packages/desktop/src-tauri/target/release/bundle/macos/Folio.app"
 ```
 
 The local build uses an ad-hoc signature; it does not prove that InDesign accepts a job or that a real template composes correctly.

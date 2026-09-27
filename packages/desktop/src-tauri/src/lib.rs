@@ -10,6 +10,7 @@ use tauri::AppHandle;
 use uuid::Uuid;
 
 mod host_bridge;
+mod help;
 mod locale;
 
 /// Returns the stored interface locale, or `None` before the user has chosen one.
@@ -505,17 +506,23 @@ pub fn run() {
         ])
         .setup(|app| {
             locale::attach_menu_items(app.handle())?;
+            help::attach_menu_item(app.handle())?;
             Ok(())
         })
         .on_menu_event(|app, event| {
-            if let Some(locale) = locale::from_menu_id(event.id().as_ref()) {
+            let id = event.id().as_ref();
+            if help::is_manual_menu_id(id) {
+                if let Err(error) = help::open_manual() {
+                    eprintln!("Could not open the user manual: {error}");
+                }
+            } else if let Some(locale) = locale::from_menu_id(id) {
                 if let Err(error) = locale::apply(app, locale) {
                     eprintln!("Could not apply interface locale {locale}: {error}");
                 }
             }
         })
         .run(tauri::generate_context!())
-        .expect("error while running Structured Publisher");
+        .expect("error while running Folio");
 }
 
 #[cfg(test)]
