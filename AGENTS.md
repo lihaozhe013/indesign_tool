@@ -13,6 +13,7 @@ The legacy InDesign panel source remains in `packages/plugin` for reference, but
 - Keep versioned document and host contracts aligned with the schemas and tests. Read [ADR 0002](docs/decisions/0002-document-ir.md) before changing persisted representations.
 - The app requires labeled Cover and Article pages, an Article `article-flow` frame, a Cover `hero-title` frame, and required style roles. A subtitle also requires a `hero-subtitle` frame. The selected template is never the output document.
 - Stage all generated files and finalize them only after document, PDF, and page preview verification passes.
+- User-facing interface text lives in the `packages/desktop/src/i18n` catalog. Do not put UI strings in the shared packages or add translations to diagnostics, Rust errors, or UXP host errors; read [ADR 0008](docs/decisions/0008-ui-localization.md) before changing that boundary.
 
 ## Verification
 

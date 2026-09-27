@@ -20,6 +20,12 @@ The product supports InDesign 2026 and templates that already carry semantic lab
 
 The core, contracts, and template compiler do not import Node, Tauri, UXP, or InDesign APIs. Direct InDesign DOM access stays in `packages/indesign`.
 
+## UI localization
+
+The WebView interface is localized for `en` and `zh-Hans` with `i18next` and `react-i18next`. `packages/desktop/src/i18n/locales/en.json` is the source of truth and `zh-Hans.json` must carry the same key set; `packages/desktop/src/i18n/catalog.test.ts` fails the build otherwise. Progress status is held as a key plus interpolation values rather than a rendered string so a language switch repaints in-flight status. The locale comes from an explicit `settings.json` preference written through `tauri-plugin-store`, then the browser language list, then English.
+
+The Folio product name, InDesign, the Markdown format name, the native window title, and the bundle name are never translated. Diagnostic messages, Rust command errors, and UXP host errors stay English, which leaves a Chinese interface mixed-language. See [ADR 0008](decisions/0008-ui-localization.md) for the boundary and the route to follow if that changes.
+
 ## HostJob v1 transport
 
 Rust creates a unique job folder containing `job.json`, a generated `.idjs` runner, `result.json`, and `done.txt`. The job includes a UUID, schema version, action, and JSON payload. The generated script embeds only the job paths and expected UUID as JSON string literals.
