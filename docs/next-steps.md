@@ -2,7 +2,7 @@
 
 ## Implementation status
 
-The product path has moved from an InDesign panel to a Tauri desktop app. The React interface, Rust file commands, HostJob v1 bridge, and UXP executor are implemented. The synthetic template generator now includes the subtitle, link, and inline-image roles used by the app's fixtures; regenerate the template before host-backed acceptance. `pnpm validate` passes with 58 JavaScript/TypeScript tests and 14 Rust tests. `pnpm desktop:build` produces a valid ad-hoc signed macOS `.app` with its Apple Events usage string.
+The product path has moved from an InDesign panel to a Tauri desktop app. The React interface, Rust file commands, HostJob v1 bridge, and UXP executor are implemented. The synthetic template generator now declares the subtitle, link, and inline-image roles, but the ignored `.indd` and scan result were generated before that revision and omit those roles. Regenerate and inspect the current fixture before host-backed acceptance. `pnpm validate` passes with 58 JavaScript/TypeScript tests and 14 Rust tests. `pnpm desktop:build` produces a valid ad-hoc signed macOS `.app` with its Apple Events usage string.
 
 The remaining gate is full host-backed acceptance through the packaged app. Keep this list current as each case is exercised.
 
@@ -11,8 +11,8 @@ The remaining gate is full host-backed acceptance through the packaged app. Keep
 - [x] Tauri 2 + React + TypeScript workspace, valid ad-hoc signed macOS `.app`, and Apple Events metadata.
 - [x] Markdown open/edit/save, role-labeled template inspection, preflight diagnostics, output selection, progress state, previews, and open-output actions.
 - [x] Rust creates isolated job/result files, runs generated top-level-await `.idjs` scripts, serializes jobs, enforces timeout, and checks result IDs and schema.
-- [x] Synthetic Cover/Article template generation verified on InDesign 21.0.0.192.
-- [ ] Regenerate the synthetic template with the subtitle, link, and inline-image roles.
+- [x] Earlier basic Synthetic Cover/Article template generation verified on InDesign 21.0.0.192.
+- [ ] Regenerate the synthetic template from the current probe and verify `hero-subtitle`, `Subtitle`, `Link`, and `InlineImage` are present in the recorded role inventory.
 - [ ] Run basic article through the built `.app`; verify editable INDD, PDF, and per-page PNGs.
 - [ ] Run long Chinese/mixed-language, image/caption, and forced-overflow articles; compare source text and output page count.
 - [ ] Run missing-resource, unavailable-host, denied-permission, timeout, and damaged-result cases; confirm no partial final set remains.
@@ -21,7 +21,7 @@ The remaining gate is full host-backed acceptance through the packaged app. Keep
 
 ## Known implementation constraints
 
-Only pre-labeled local templates are supported. The Cover page must provide a `hero-title` frame; Article needs one `article-flow` frame and the compiled style roles. Template role editing and real design-template acceptance are later milestones.
+Only pre-labeled local templates are supported. The Cover page must provide a `hero-title` frame; Article needs one `article-flow` frame and the required `ArticleTitle`, `SectionHeading`, and `Body` styles. Articles with subtitles need a `hero-subtitle` frame. Text formatting roles used by an article—`Quote`, `Caption`, `Emphasis`, `Link`, and `Code`—must resolve to styles; subtitle and image-frame styles are applied when available. Template role editing and real design-template acceptance are later milestones.
 
 The UXP runner launches with macOS Apple Events. A first run may be denied in System Settings; the UI should surface that error. The signed, notarized distribution flow is not part of this first local build.
 

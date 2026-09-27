@@ -7,9 +7,10 @@ Accepted; host-verified 2026-09-24
 ## Decision
 
 Annotate semantic roles on existing pages, frames, and named styles with a
-namespaced script label under the key `com.publisher.role`. The panel writes
-labels inside InDesign; the template compiler reads them through the
-structural scan and generates the manifest. A generated sidecar manifest
+namespaced script label under the key `com.publisher.role`. For the first
+desktop release, designers add these labels in InDesign before selecting the
+template; the app scans them and the template compiler generates the manifest.
+Template-role editing in the app is deferred. A generated sidecar manifest
 keyed by object name is rejected because label persistence and lookup pass
 the host probes.
 

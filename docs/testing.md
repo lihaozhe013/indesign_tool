@@ -21,7 +21,7 @@ The local build uses an ad-hoc signature; it does not prove that InDesign accept
 
 ## InDesign host lane
 
-Use InDesign 2026 on macOS and a disposable synthetic template. The generator is `packages/indesign/probes/synthetic-template-probe.idjs`; regenerate `artifacts/host/indesign-21.0.0.192/templates/synthetic-cover-article.indd` because earlier copies were zero bytes.
+Use InDesign 2026 on macOS and a disposable synthetic template. The generator is `packages/indesign/probes/synthetic-template-probe.idjs`. Regenerate `artifacts/host/indesign-21.0.0.192/templates/synthetic-cover-article.indd` before testing: the current ignored `.indd` is non-empty, but it and its scan result predate the latest generator revision. The recorded role inventory omits `hero-subtitle`, `Subtitle`, `Link`, and `InlineImage`. Confirm the fresh inventory includes those roles (as well as `hero-title`, `hero-image`, `article-flow`, `Cover`, `Article`, and the other generated style roles) before using the fixture.
 
 Run the desktop app and verify:
 

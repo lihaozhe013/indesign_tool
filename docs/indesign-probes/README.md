@@ -27,7 +27,7 @@ Object, graphic, anchor, wrap, export, and font probes cover the remaining place
 - Frame ownership follows geometric bounds, not the collection targeted: on a two-page parent spread, positive-x bounds land on the right page, and out-of-page bounds place a frame on the pasteboard with a null `parentPage`. Derive frame geometry from the target page's `bounds`.
 - Enum-like values (wrap mode, link status, fit options) come back as wrapper objects: `Object.keys` is empty and identity comparison fails, so compare `String(value)`.
 - Correction (2026-09-27): the earlier file-system probe used an unawaited async IIFE. That execution form did not keep the UXP script alive for pending file operations. A corrected top-level-await script completed temporary-file write, read, and delete on InDesign 21.0.0.192 / DOM 21.0 / UXP 9.0.3-local. See `docs/implementation-plan.md` for the desktop HostJob transport.
-- AppleScript `do script ... with arguments` values are not delivered to a `.idjs` script; its wrapped `arguments` object contains only internal values (exports, script path, directory). Pass data through generated script content or a panel transport instead.
+- AppleScript `do script ... with arguments` values are not delivered to a `.idjs` script; its wrapped `arguments` object contains only internal values (exports, script path, directory). Pass data through generated script content or a job-file transport; the desktop bridge uses per-job files.
 
 ## Automated probe execution
 

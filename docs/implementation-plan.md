@@ -40,7 +40,7 @@ Apple's UXP file API is available to Scripts Panel scripts. Earlier probe code u
 ## Current scope and limits
 
 - macOS only, local use only, InDesign 2026 only.
-- Only pre-labeled templates with Cover, Article, `article-flow`, `hero-title`, and required style roles are accepted.
+- Only pre-labeled templates with Cover and Article pages, an Article `article-flow` frame, a Cover `hero-title` frame, and the required `ArticleTitle`, `SectionHeading`, and `Body` styles are accepted. Articles with subtitles also require a `hero-subtitle` frame; content that uses quotes, captions, emphasis, links, or code needs the matching style roles.
 - Local relative image paths are resolved from the saved Markdown file.
 - Host typography and fit remain InDesign decisions. The core does not estimate line breaks.
 - The old plugin source remains in the repository for historical comparison but is excluded from the workspace build and product workflow.
@@ -48,4 +48,4 @@ Apple's UXP file API is available to Scripts Panel scripts. Earlier probe code u
 
 ## Acceptance
 
-The synthetic template is regenerated from `packages/indesign/probes/synthetic-template-probe.idjs`; the old checked host file was empty and is not a test input. Acceptance uses basic text, long Chinese and mixed-language copy, captions and images, forced overset, and missing assets. A packaged macOS app must also exercise InDesign unavailable, Apple Events authorization, timeout, and damaged result cases. See [testing strategy](testing.md) for the host and packaging lanes.
+Regenerate the ignored synthetic template from `packages/indesign/probes/synthetic-template-probe.idjs` before host acceptance. The existing `.indd` and scan result predate the latest probe revision: the document is no longer empty, but its recorded role inventory omits `hero-subtitle`, `Subtitle`, `Link`, and `InlineImage`. Acceptance uses basic text, long Chinese and mixed-language copy, captions and images, forced overset, and missing assets. A packaged macOS app must also exercise InDesign unavailable, Apple Events authorization, timeout, and damaged result cases. See [testing strategy](testing.md) for the host and packaging lanes.
