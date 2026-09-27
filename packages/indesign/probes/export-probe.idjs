@@ -108,6 +108,6 @@ const result = {
       && result.scratchDocumentClosed
       && (result.openDocumentCountImmediate === result.openDocumentCountBefore
         || result.openDocumentCountImmediate === result.openDocumentCountBefore + 1);
-    console.log("PUBLISHER_EXPORT_PROBE_V2 " + JSON.stringify(result));
+    console.log("FOLIO_EXPORT_PROBE_V2 " + JSON.stringify(result));
   }
 })();

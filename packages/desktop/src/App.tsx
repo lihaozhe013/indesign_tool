@@ -10,10 +10,10 @@ import type {
   SemanticDocument,
   TemplateInventory,
   TemplateScan
-} from "@publisher/contracts";
-import { createIndesignAdapter, planHostOperations } from "@publisher/indesign";
-import { parseArticle, publishDocument } from "@publisher/core";
-import { compileTemplate, createTemplateInventory, deriveRoleAssignments } from "@publisher/template";
+} from "@folio/contracts";
+import { createIndesignAdapter, planHostOperations } from "@folio/indesign";
+import { parseArticle, publishDocument } from "@folio/core";
+import { compileTemplate, createTemplateInventory, deriveRoleAssignments } from "@folio/template";
 import { applyDocumentLocale, supportedLocales, type Locale } from "./i18n/index.js";
 import { verifyDocumentDump } from "./publication-verification.js";
 import {
@@ -399,7 +399,7 @@ export function App() {
           <div className="brand-mark" aria-hidden="true"><span /><span /><span /></div>
           <div>
             <div className="brand-name">Folio</div>
-            <div className="brand-caption">STRUCTURED PUBLISHING</div>
+            <div className="brand-caption">DESKTOP PUBLISHING</div>
           </div>
         </div>
 
@@ -438,7 +438,7 @@ export function App() {
               </button>
             ))}
           </div>
-          <div className="sidebar-version">Folio Desktop · 0.1.0</div>
+          <div className="sidebar-version">Folio · 0.1.0</div>
         </div>
       </aside>
 

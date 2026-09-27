@@ -88,5 +88,5 @@ try {
   result.success = result.success
     && result.scratchDocumentClosed
     && result.openDocumentCountAfter === result.openDocumentCountBefore;
-  console.log("PUBLISHER_OVERSET_PROBE_V1 " + JSON.stringify(result));
+  console.log("FOLIO_OVERSET_PROBE_V1 " + JSON.stringify(result));
 }

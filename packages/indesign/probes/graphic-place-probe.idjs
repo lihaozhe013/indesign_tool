@@ -69,7 +69,7 @@ try {
   const frame = page.rectangles.add({
     geometricBounds: [pageBounds[0] + 120, pageBounds[1] + 20, pageBounds[0] + 180, pageBounds[3] - 20]
   });
-  const objectStyle = scratchDocument.objectStyles.add({ name: "Publisher Probe Image Frame" });
+  const objectStyle = scratchDocument.objectStyles.add({ name: "Folio Probe Image Frame" });
   frame.applyObjectStyle(objectStyle, true);
   const placedInFrame = read(function () { return items(frame.place(ASSET_PATH)); }, []);
   const graphic = placedInFrame.length > 0 ? placedInFrame[0] : null;
@@ -117,7 +117,7 @@ try {
     linkNotMissing: result.autoPlace.link !== null && result.autoPlace.link.missing === false,
     imageFacts: result.autoPlace.imageTypeName !== null && result.autoPlace.effectivePpi !== null,
     frameStyledAndPlaced: result.framePlace.graphicCount === 1
-      && result.framePlace.appliedObjectStyleName === "Publisher Probe Image Frame",
+      && result.framePlace.appliedObjectStyleName === "Folio Probe Image Frame",
     missingAssetFails: result.missingAsset.threw === true
   };
   result.success = Object.keys(result.checks).every(function (key) { return result.checks[key] === true; });
@@ -139,5 +139,5 @@ try {
   result.success = result.success
     && result.scratchDocumentClosed
     && result.openDocumentCountAfter === result.openDocumentCountBefore;
-  console.log("PUBLISHER_GRAPHIC_PLACE_PROBE_V2 " + JSON.stringify(result));
+  console.log("FOLIO_GRAPHIC_PLACE_PROBE_V2 " + JSON.stringify(result));
 }

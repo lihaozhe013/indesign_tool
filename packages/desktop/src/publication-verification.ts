@@ -1,4 +1,4 @@
-import type { Diagnostic, DocumentDump, SemanticDocument } from "@publisher/contracts";
+import type { Diagnostic, DocumentDump, SemanticDocument } from "@folio/contracts";
 
 export function verifyDocumentDump(dump: DocumentDump, document: SemanticDocument): Diagnostic[] {
   const diagnostics: Diagnostic[] = [];

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import fc from "fast-check";
-import { FakeHostAdapter, makeInventory, fakeObservation } from "@publisher/test-support";
-import { stableJson } from "@publisher/contracts";
+import { FakeHostAdapter, makeInventory, fakeObservation } from "@folio/test-support";
+import { stableJson } from "@folio/contracts";
 import { compileTemplate } from "../../template/src/index.js";
 import { parseArticle } from "./markdown.js";
 import { planDocument, respondToObservation } from "./planner.js";

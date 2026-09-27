@@ -14,7 +14,7 @@ const { app } = require("indesign");
 // cannot erase the evidence. The queued job/result transport therefore needs
 // a real UXP panel with manifest permissions (UXP Developer Tool), not a
 // Scripts Panel script.
-const FILE_NAME = "publisher-probe-io.json";
+const FILE_NAME = "folio-probe-io.json";
 
 function read(readValue, fallback) {
   try {
@@ -26,7 +26,7 @@ function read(readValue, fallback) {
 }
 
 function logStep(step, data) {
-  console.log("PUBLISHER_UXP_FILE_IO_STEP_V1 " + JSON.stringify(Object.assign({ step: step }, data)));
+  console.log("FOLIO_UXP_FILE_IO_STEP_V1 " + JSON.stringify(Object.assign({ step: step }, data)));
 }
 
 async function settled(value) {
@@ -73,7 +73,7 @@ const result = {
     };
     result.success = Object.keys(result.checks).every(function (key) { return result.checks[key] === true; });
     logStep("verified", { path: result.createdFilePath, size: result.fileSizeAfterCreate });
-    console.log("PUBLISHER_UXP_FILE_IO_PROBE_V1 " + JSON.stringify(result));
+    console.log("FOLIO_UXP_FILE_IO_PROBE_V1 " + JSON.stringify(result));
 
     // Cleanup is best effort and logged separately; it is not covered by the
     // success gate because the same FS gate may block it.
@@ -87,6 +87,6 @@ const result = {
   } catch (error) {
     result.error = String(error && error.stack ? error.stack : error);
     logStep("error", { message: String(error && error.message ? error.message : error) });
-    console.log("PUBLISHER_UXP_FILE_IO_PROBE_V1 " + JSON.stringify(result));
+    console.log("FOLIO_UXP_FILE_IO_PROBE_V1 " + JSON.stringify(result));
   }
 })();

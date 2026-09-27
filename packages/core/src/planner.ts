@@ -5,7 +5,7 @@ import type {
   DocumentPageIR,
   HostObservation,
   SemanticDocument
-} from "@publisher/contracts";
+} from "@folio/contracts";
 
 export interface PlanningResult {
   ir?: DocumentIR;

@@ -96,9 +96,9 @@ const result = {
         ? String(read(function () { return dupFrames[0].extractLabel(KEY); }, "")) : null,
       textFrameC: dupFrames.length >= 2
         ? String(read(function () { return dupFrames[1].extractLabel(KEY); }, "")) : null,
-      paragraphStyle: labelOfStyle(reopenedDocument.paragraphStyles, "Publisher Probe Labeled Body"),
-      characterStyle: labelOfStyle(reopenedDocument.characterStyles, "Publisher Probe Labeled Emphasis"),
-      objectStyle: labelOfStyle(reopenedDocument.objectStyles, "Publisher Probe Labeled Frame")
+      paragraphStyle: labelOfStyle(reopenedDocument.paragraphStyles, "Folio Probe Labeled Body"),
+      characterStyle: labelOfStyle(reopenedDocument.characterStyles, "Folio Probe Labeled Emphasis"),
+      objectStyle: labelOfStyle(reopenedDocument.objectStyles, "Folio Probe Labeled Frame")
     };
     result.reopenedLabels = reopenedLabels;
     result.pageFrameCount = frames.length;
@@ -114,13 +114,13 @@ const result = {
     };
     result.styleValidAfterReopen = {
       paragraph: read(function () {
-        return reopenedDocument.paragraphStyles.itemByName("Publisher Probe Labeled Body").isValid;
+        return reopenedDocument.paragraphStyles.itemByName("Folio Probe Labeled Body").isValid;
       }, null),
       character: read(function () {
-        return reopenedDocument.characterStyles.itemByName("Publisher Probe Labeled Emphasis").isValid;
+        return reopenedDocument.characterStyles.itemByName("Folio Probe Labeled Emphasis").isValid;
       }, null),
       object: read(function () {
-        return reopenedDocument.objectStyles.itemByName("Publisher Probe Labeled Frame").isValid;
+        return reopenedDocument.objectStyles.itemByName("Folio Probe Labeled Frame").isValid;
       }, null)
     };
 
@@ -163,6 +163,6 @@ const result = {
     result.success = result.success
       && result.reopenedDocumentClosed
       && result.openDocumentCountAfter === result.openDocumentCountBefore;
-    console.log("PUBLISHER_LABEL_REOPEN_PROBE_V4 " + JSON.stringify(result));
+    console.log("FOLIO_LABEL_REOPEN_PROBE_V4 " + JSON.stringify(result));
   }
 })();

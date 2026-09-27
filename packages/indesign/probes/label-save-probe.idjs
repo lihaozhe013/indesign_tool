@@ -42,9 +42,9 @@ const result = {
     frameB.name = "ProbeDup";
     frameC.name = "ProbeDup";
 
-    const paragraphStyle = scratchDocument.paragraphStyles.add({ name: "Publisher Probe Labeled Body" });
-    const characterStyle = scratchDocument.characterStyles.add({ name: "Publisher Probe Labeled Emphasis" });
-    const objectStyle = scratchDocument.objectStyles.add({ name: "Publisher Probe Labeled Frame" });
+    const paragraphStyle = scratchDocument.paragraphStyles.add({ name: "Folio Probe Labeled Body" });
+    const characterStyle = scratchDocument.characterStyles.add({ name: "Folio Probe Labeled Emphasis" });
+    const objectStyle = scratchDocument.objectStyles.add({ name: "Folio Probe Labeled Frame" });
 
     scratchDocument.insertLabel(KEY, "probe-document");
     page.insertLabel(KEY, "probe-page-article");
@@ -101,6 +101,6 @@ const result = {
     result.success = result.success
       && result.scratchDocumentClosed
       && result.openDocumentCountAfter === result.openDocumentCountBefore;
-    console.log("PUBLISHER_LABEL_SAVE_PROBE_V4 " + JSON.stringify(result));
+    console.log("FOLIO_LABEL_SAVE_PROBE_V4 " + JSON.stringify(result));
   }
 })();

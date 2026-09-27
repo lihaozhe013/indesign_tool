@@ -4,8 +4,8 @@ import type {
   StyleRole,
   TemplateRoleAssignments,
   TemplateScan
-} from "@publisher/contracts";
-import { validateTemplateScan } from "@publisher/contracts";
+} from "@folio/contracts";
+import { validateTemplateScan } from "@folio/contracts";
 
 const PAGE_ROLES: PageRole[] = ["Cover", "Article", "Ending", "ImageFeature"];
 const STYLE_ROLES: StyleRole[] = [

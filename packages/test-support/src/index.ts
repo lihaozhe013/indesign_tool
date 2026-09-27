@@ -6,7 +6,7 @@ import type {
   HostObservation,
   SemanticDocument,
   TemplateInventory
-} from "@publisher/contracts";
+} from "@folio/contracts";
 
 export class FakeHostAdapter implements HostAdapter {
   readonly operations: string[] = [];

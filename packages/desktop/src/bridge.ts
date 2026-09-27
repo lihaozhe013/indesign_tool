@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import type { HostJob, HostJobResult } from "@publisher/contracts";
+import type { HostJob, HostJobResult } from "@folio/contracts";
 import { LOCALE_CHANGED_EVENT, type Locale } from "./i18n/locale.js";
 
 export interface OpenedTextFile {

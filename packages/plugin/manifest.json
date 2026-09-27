@@ -1,7 +1,7 @@
 {
   "manifestVersion": 5,
-  "id": "com.openai.structured-publisher",
-  "name": "Structured Publisher",
+  "id": "com.openai.folio",
+  "name": "Folio",
   "version": "0.1.0",
   "main": "index.html",
   "host": {
@@ -11,8 +11,8 @@
   "entrypoints": [
     {
       "type": "panel",
-      "id": "structuredPublisherPanel",
-      "label": { "default": "Structured Publisher" },
+      "id": "folioPanel",
+      "label": { "default": "Folio" },
       "minimumSize": { "width": 280, "height": 300 },
       "preferredDockedSize": { "width": 340, "height": 480 },
       "preferredFloatingSize": { "width": 360, "height": 520 }

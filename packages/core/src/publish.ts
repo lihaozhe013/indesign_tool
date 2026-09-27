@@ -5,7 +5,7 @@ import type {
   HostAdapter,
   HostObservation,
   SemanticDocument
-} from "@publisher/contracts";
+} from "@folio/contracts";
 import { planDocument, respondToObservation } from "./planner.js";
 
 export interface PublishInput {

@@ -18,7 +18,7 @@ try {
   });
   textFrame.contents = "Character style probe";
 
-  const styleName = "Publisher Probe Emphasis";
+  const styleName = "Folio Probe Emphasis";
   const createdStyle = scratchDocument.characterStyles.add({ name: styleName });
   const paragraph = textFrame.parentStory.paragraphs.item(0);
   paragraph.applyCharacterStyle(createdStyle);
@@ -48,5 +48,5 @@ try {
   result.success = result.success
     && result.scratchDocumentClosed
     && result.openDocumentCountAfter === result.openDocumentCountBefore;
-  console.log("PUBLISHER_CHARACTER_STYLE_PROBE_V1 " + JSON.stringify(result));
+  console.log("FOLIO_CHARACTER_STYLE_PROBE_V1 " + JSON.stringify(result));
 }

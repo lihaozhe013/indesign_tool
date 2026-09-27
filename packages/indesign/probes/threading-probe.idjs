@@ -105,5 +105,5 @@ try {
   result.success = result.success
     && result.scratchDocumentClosed
     && result.openDocumentCountAfter === result.openDocumentCountBefore;
-  console.log("PUBLISHER_THREADING_PROBE_V1 " + JSON.stringify(result));
+  console.log("FOLIO_THREADING_PROBE_V1 " + JSON.stringify(result));
 }

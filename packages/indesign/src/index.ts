@@ -10,7 +10,7 @@ import type {
   HostObservation,
   SemanticDocument,
   TemplateInventory
-} from "@publisher/contracts";
+} from "@folio/contracts";
 
 export * from "./materialize.js";
 

@@ -34,4 +34,4 @@ try {
   result.argumentsError = String(error && error.message ? error.message : error);
 }
 
-console.log("PUBLISHER_DO_SCRIPT_ARGS_PROBE_V2 " + JSON.stringify(result));
+console.log("FOLIO_DO_SCRIPT_ARGS_PROBE_V2 " + JSON.stringify(result));

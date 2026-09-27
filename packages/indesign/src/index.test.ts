@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { DocumentDump, HostJob, HostJobQueue, HostJobResult } from "@publisher/contracts";
+import type { DocumentDump, HostJob, HostJobQueue, HostJobResult } from "@folio/contracts";
 import { canonicalizeDocumentDump, createIndesignAdapter, processPendingJobs } from "./index.js";
 import type { HostOperationError } from "./index.js";
 

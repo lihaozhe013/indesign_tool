@@ -619,4 +619,4 @@ async function runHostJob(jobPath, resultPath, donePath, expectedJobId) {
   await doneFile.write(expectedJobId);
 }
 
-globalThis.PublisherHostRunner = { runHostJob: runHostJob };
+globalThis.FolioHostRunner = { runHostJob: runHostJob };

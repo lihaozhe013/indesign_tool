@@ -472,7 +472,7 @@ fn has_url_scheme(source: &str) -> bool {
 
 fn stage_directory(parent: &Path, stem: &str, stage_id: &str) -> Result<PathBuf, String> {
     Uuid::parse_str(stage_id).map_err(|_| "The output staging ID is invalid.".to_string())?;
-    Ok(parent.join(format!(".{stem}.publisher-stage-{stage_id}")))
+    Ok(parent.join(format!(".{stem}.folio-stage-{stage_id}")))
 }
 
 fn require_nonempty_file(path: &Path, label: &str) -> Result<(), String> {
@@ -553,7 +553,7 @@ mod tests {
 
     #[test]
     fn finalizes_only_a_complete_staged_output_set() {
-        let root = std::env::temp_dir().join(format!("publisher-stage-test-{}", Uuid::new_v4()));
+        let root = std::env::temp_dir().join(format!("folio-stage-test-{}", Uuid::new_v4()));
         fs::create_dir_all(&root).unwrap();
         let output = root.join("article.indd");
         let stage = prepare_output_stage(output.to_string_lossy().into_owned()).unwrap();
@@ -580,7 +580,7 @@ mod tests {
 
     #[test]
     fn rejects_an_incomplete_staged_preview_set_without_publishing_files() {
-        let root = std::env::temp_dir().join(format!("publisher-stage-test-{}", Uuid::new_v4()));
+        let root = std::env::temp_dir().join(format!("folio-stage-test-{}", Uuid::new_v4()));
         fs::create_dir_all(&root).unwrap();
         let output = root.join("article.indd");
         let stage = prepare_output_stage(output.to_string_lossy().into_owned()).unwrap();
@@ -602,7 +602,7 @@ mod tests {
 
     #[test]
     fn rejects_an_empty_page_preview_without_publishing_files() {
-        let root = std::env::temp_dir().join(format!("publisher-stage-test-{}", Uuid::new_v4()));
+        let root = std::env::temp_dir().join(format!("folio-stage-test-{}", Uuid::new_v4()));
         fs::create_dir_all(&root).unwrap();
         let output = root.join("article.indd");
         let stage = prepare_output_stage(output.to_string_lossy().into_owned()).unwrap();

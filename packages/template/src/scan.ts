@@ -5,8 +5,8 @@ import type {
   TemplateInventory,
   TemplateRoleAssignments,
   TemplateScan
-} from "@publisher/contracts";
-import { validateTemplateRoleAssignments, validateTemplateScan } from "@publisher/contracts";
+} from "@folio/contracts";
+import { validateTemplateRoleAssignments, validateTemplateScan } from "@folio/contracts";
 
 export interface CreateTemplateInventoryResult {
   inventory?: TemplateInventory;

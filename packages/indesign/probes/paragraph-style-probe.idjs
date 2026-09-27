@@ -18,7 +18,7 @@ try {
   });
   textFrame.contents = "Paragraph style probe";
 
-  const styleName = "Publisher Probe Body";
+  const styleName = "Folio Probe Body";
   const createdStyle = scratchDocument.paragraphStyles.add({ name: styleName });
   const paragraph = textFrame.parentStory.paragraphs.item(0);
   paragraph.applyParagraphStyle(createdStyle, true);
@@ -48,5 +48,5 @@ try {
   result.success = result.success
     && result.scratchDocumentClosed
     && result.openDocumentCountAfter === result.openDocumentCountBefore;
-  console.log("PUBLISHER_PARAGRAPH_STYLE_PROBE_V1 " + JSON.stringify(result));
+  console.log("FOLIO_PARAGRAPH_STYLE_PROBE_V1 " + JSON.stringify(result));
 }

@@ -4,7 +4,7 @@ const { app, SaveOptions } = require("indesign");
 // of a paragraph, and detect how an unavailable font surfaces (throw versus a
 // substituted status). This is the host evidence behind FontMissing and
 // FontSubstituted diagnostics.
-const MISSING_FONT_NAME = "Publisher Probe Missing Font 2026";
+const MISSING_FONT_NAME = "Folio Probe Missing Font 2026";
 
 function read(readValue, fallback) {
   try {
@@ -120,5 +120,5 @@ try {
   result.success = result.success
     && result.scratchDocumentClosed
     && result.openDocumentCountAfter === result.openDocumentCountBefore;
-  console.log("PUBLISHER_FONT_STATUS_PROBE_V3 " + JSON.stringify(result));
+  console.log("FOLIO_FONT_STATUS_PROBE_V3 " + JSON.stringify(result));
 }

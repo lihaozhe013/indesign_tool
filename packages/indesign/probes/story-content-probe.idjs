@@ -107,5 +107,5 @@ try {
   result.success = result.success
     && result.scratchDocumentClosed
     && result.openDocumentCountAfter === result.openDocumentCountBefore;
-  console.log("PUBLISHER_STORY_CONTENT_PROBE_V3 " + JSON.stringify(result));
+  console.log("FOLIO_STORY_CONTENT_PROBE_V3 " + JSON.stringify(result));
 }

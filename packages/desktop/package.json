@@ -1,13 +1,13 @@
 {
-  "name": "@publisher/desktop",
+  "name": "@folio/desktop",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "dependencies": {
-    "@publisher/contracts": "workspace:*",
-    "@publisher/core": "workspace:*",
-    "@publisher/indesign": "workspace:*",
-    "@publisher/template": "workspace:*",
+    "@folio/contracts": "workspace:*",
+    "@folio/core": "workspace:*",
+    "@folio/indesign": "workspace:*",
+    "@folio/template": "workspace:*",
     "@tauri-apps/api": "^2.12.0",
     "i18next": "^26.4.2",
     "react": "^19.3.0",

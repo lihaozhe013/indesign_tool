@@ -2,7 +2,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
-import { mountPublisherPanel } from "./index.js";
+import { mountFolioPanel } from "./index.js";
 
 const panelSource = readFileSync(resolve(process.cwd(), "packages/plugin/index.html"), "utf8");
 const panelMarkup = panelSource.replace(/\s*<script defer[^>]*><\/script>/, "");
@@ -14,7 +14,7 @@ describe("publishing panel", () => {
 
   beforeEach(() => {
     document.body.innerHTML = panelMarkup;
-    mountPublisherPanel(document as unknown as Document);
+    mountFolioPanel(document as unknown as Document);
   });
 
   it("validates the example and displays a semantic outline rather than raw JSON", () => {

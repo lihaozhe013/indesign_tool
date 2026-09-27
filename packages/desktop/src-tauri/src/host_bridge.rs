@@ -83,7 +83,7 @@ fn build_script(
         .into_iter()
         .collect::<Result<Vec<_>, _>>()?;
     let id = serde_json::to_string(job_id).map_err(|error| error.to_string())?;
-    source.push_str("\nawait globalThis.PublisherHostRunner.runHostJob(");
+    source.push_str("\nawait globalThis.FolioHostRunner.runHostJob(");
     source.push_str(&paths[0]);
     source.push(',');
     source.push_str(&paths[1]);
@@ -236,7 +236,7 @@ mod tests {
             "00000000-0000-4000-8000-000000000001",
         )
         .unwrap();
-        assert!(script.contains("await globalThis.PublisherHostRunner.runHostJob("));
+        assert!(script.contains("await globalThis.FolioHostRunner.runHostJob("));
         assert!(script.contains("/tmp/job-1/job.json"));
         assert!(script.contains("/tmp/job-1/result.json"));
         assert!(script.contains("/tmp/job-1/done.txt"));
@@ -285,7 +285,7 @@ mod tests {
     #[test]
     fn waits_for_a_completion_marker_after_the_launcher_exits() {
         let root =
-            std::env::temp_dir().join(format!("publisher-host-job-{}", uuid::Uuid::new_v4()));
+            std::env::temp_dir().join(format!("folio-host-job-{}", uuid::Uuid::new_v4()));
         fs::create_dir_all(&root).unwrap();
         let mut child = std::process::Command::new("/usr/bin/true").spawn().unwrap();
         let error = wait_for_completion(&mut child, &root.join("done.txt"), Duration::from_secs(1))
@@ -298,7 +298,7 @@ mod tests {
     #[test]
     fn reports_a_failed_launcher_without_waiting_for_the_job_timeout() {
         let root =
-            std::env::temp_dir().join(format!("publisher-host-job-{}", uuid::Uuid::new_v4()));
+            std::env::temp_dir().join(format!("folio-host-job-{}", uuid::Uuid::new_v4()));
         fs::create_dir_all(&root).unwrap();
         let mut child = std::process::Command::new("/usr/bin/false")
             .spawn()
@@ -314,7 +314,7 @@ mod tests {
     #[test]
     fn kills_a_launcher_after_the_host_timeout() {
         let root =
-            std::env::temp_dir().join(format!("publisher-host-job-{}", uuid::Uuid::new_v4()));
+            std::env::temp_dir().join(format!("folio-host-job-{}", uuid::Uuid::new_v4()));
         fs::create_dir_all(&root).unwrap();
         let mut child = std::process::Command::new("/bin/sleep")
             .arg("5")

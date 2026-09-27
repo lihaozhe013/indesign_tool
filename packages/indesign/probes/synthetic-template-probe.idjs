@@ -214,5 +214,5 @@ try {
       && result.scratchDocumentClosed
       && (result.openDocumentCountImmediate === result.openDocumentCountBefore
         || result.openDocumentCountImmediate === result.openDocumentCountBefore + 1);
-    console.log("PUBLISHER_SYNTHETIC_TEMPLATE_PROBE_V4 " + JSON.stringify(result));
+    console.log("FOLIO_SYNTHETIC_TEMPLATE_PROBE_V4 " + JSON.stringify(result));
   }

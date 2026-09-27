@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { DocumentDump, SemanticDocument } from "@publisher/contracts";
-import { parseArticle } from "@publisher/core";
+import type { DocumentDump, SemanticDocument } from "@folio/contracts";
+import { parseArticle } from "@folio/core";
 import { verifyDocumentDump } from "./publication-verification.js";
 
 const article = parseArticle(`---

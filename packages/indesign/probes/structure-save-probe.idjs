@@ -46,8 +46,8 @@ const result = {
     parentFlow.contents = "Parent page frame text";
     parentFlow.insertLabel(ROLE_KEY, "probe-parent-article-flow");
 
-    const paragraphStyle = scratchDocument.paragraphStyles.add({ name: "Publisher Structure Body" });
-    const characterStyle = scratchDocument.characterStyles.add({ name: "Publisher Structure Emphasis" });
+    const paragraphStyle = scratchDocument.paragraphStyles.add({ name: "Folio Structure Body" });
+    const characterStyle = scratchDocument.characterStyles.add({ name: "Folio Structure Emphasis" });
     paragraphStyle.insertLabel(ROLE_KEY, "probe-style-body");
     characterStyle.insertLabel(ROLE_KEY, "probe-style-emphasis");
 
@@ -113,8 +113,8 @@ const result = {
     result.success = result.saved.storyContents === STRUCTURE_TEXT
       && result.saved.flowNextFrameId === result.saved.flowFrameBId
       && result.saved.paragraphStyleNames.length === 2
-      && result.saved.paragraphStyleNames[0] === "Publisher Structure Body"
-      && result.saved.characterStyleName === "Publisher Structure Emphasis";
+      && result.saved.paragraphStyleNames[0] === "Folio Structure Body"
+      && result.saved.characterStyleName === "Folio Structure Emphasis";
   } catch (error) {
     result.error = String(error && error.stack ? error.stack : error);
   } finally {
@@ -140,6 +140,6 @@ const result = {
       && result.scratchDocumentClosed
       && (result.openDocumentCountImmediate === result.openDocumentCountBefore
         || result.openDocumentCountImmediate === result.openDocumentCountBefore + 1);
-    console.log("PUBLISHER_STRUCTURE_SAVE_PROBE_V5 " + JSON.stringify(result));
+    console.log("FOLIO_STRUCTURE_SAVE_PROBE_V5 " + JSON.stringify(result));
   }
 })();

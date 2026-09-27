@@ -3,14 +3,14 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Structured Publisher</title>
+    <title>Folio</title>
     <style>
       * { box-sizing: border-box; }
       body { margin: 0; background: #f4f4f4; color: #262626; font: 12px/1.45 sans-serif; }
       button, textarea { font: inherit; }
       button { cursor: pointer; }
       button:focus, textarea:focus { outline: 2px solid #1473e6; outline-offset: 1px; }
-      #publisher-panel { min-height: 100vh; max-width: 380px; margin: 0 auto; padding: 14px; }
+      #folio-panel { min-height: 100vh; max-width: 380px; margin: 0 auto; padding: 14px; }
       .panel-header { margin-bottom: 14px; }
       .eyebrow { margin: 0 0 3px; color: #666; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
       h1 { margin: 0; font-size: 18px; font-weight: 600; }
@@ -53,10 +53,10 @@
     <script defer src="./dist/index.js"></script>
   </head>
   <body>
-    <main id="publisher-panel">
+    <main id="folio-panel">
       <header class="panel-header">
         <p class="eyebrow">Publishing workspace</p>
-        <h1>Structured Publisher</h1>
+        <h1>Folio</h1>
         <p class="intro">Check article structure before InDesign composes the page.</p>
         <span id="validation-status" data-state="idle" role="status" aria-live="polite">Ready to validate</span>
       </header>

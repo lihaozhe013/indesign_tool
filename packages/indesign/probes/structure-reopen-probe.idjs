@@ -79,8 +79,8 @@ const result = {
     }
     const containers = story ? items(story.textContainers) : [];
     const adoptedFlow = findRoleFrames(articlePage.textFrames, "probe-parent-article-flow")[0] ?? null;
-    const paragraphStyle = document.paragraphStyles.itemByName("Publisher Structure Body");
-    const characterStyle = document.characterStyles.itemByName("Publisher Structure Emphasis");
+    const paragraphStyle = document.paragraphStyles.itemByName("Folio Structure Body");
+    const characterStyle = document.characterStyles.itemByName("Folio Structure Emphasis");
 
     result.reopened = {
       pageCount: document.pages.length,
@@ -133,9 +133,9 @@ const result = {
       threadingPersisted: result.reopened.textContainerCount === 2
         && result.reopened.threadChain === true,
       paragraphStylesPersisted: result.reopened.paragraphStyleNames.length === 3
-        && result.reopened.paragraphStyleNames.every(function (name) { return name === "Publisher Structure Body"; })
+        && result.reopened.paragraphStyleNames.every(function (name) { return name === "Folio Structure Body"; })
         && result.reopened.paragraphStyleValid === true,
-      characterStylePersisted: result.reopened.characterStyleName === "Publisher Structure Emphasis"
+      characterStylePersisted: result.reopened.characterStyleName === "Folio Structure Emphasis"
         && result.reopened.characterStyleValid === true
     };
     result.success = Object.keys(result.checks).every(function (key) { return result.checks[key] === true; });
@@ -157,6 +157,6 @@ const result = {
     result.success = result.success
       && result.reopenedDocumentClosed
       && result.openDocumentCountAfter === result.openDocumentCountBefore;
-    console.log("PUBLISHER_STRUCTURE_REOPEN_PROBE_V4 " + JSON.stringify(result));
+    console.log("FOLIO_STRUCTURE_REOPEN_PROBE_V4 " + JSON.stringify(result));
   }
 })();

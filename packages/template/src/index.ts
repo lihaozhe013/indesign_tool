@@ -7,8 +7,8 @@ import type {
   StyleRole,
   TemplateFrame,
   TemplateInventory
-} from "@publisher/contracts";
-import { validateVersionedObject } from "@publisher/contracts";
+} from "@folio/contracts";
+import { validateVersionedObject } from "@folio/contracts";
 export { createTemplateInventory } from "./scan.js";
 export type { CreateTemplateInventoryResult } from "./scan.js";
 export { deriveRoleAssignments } from "./roles.js";

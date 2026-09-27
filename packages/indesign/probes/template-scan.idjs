@@ -254,18 +254,18 @@ function run(document) {
     assets: linkRecords(document, inDesign.LinkStatus),
     fonts: fontRecords(document, inDesign.FontStatus)
   };
-  console.log("PUBLISHER_TEMPLATE_SCAN_V1 " + JSON.stringify(scan));
+  console.log("FOLIO_TEMPLATE_SCAN_V1 " + JSON.stringify(scan));
 }
 
 try {
   if (SCAN_TARGET_FILE) {
     scanTargetFile(SCAN_TARGET_FILE).catch(function (error) {
-      console.log("PUBLISHER_TEMPLATE_SCAN_ERROR " + String(error && error.stack ? error.stack : error));
+      console.log("FOLIO_TEMPLATE_SCAN_ERROR " + String(error && error.stack ? error.stack : error));
     });
   } else {
     if (app.documents.length === 0) throw new Error("Open the disposable InDesign document before running this probe.");
     run(app.activeDocument);
   }
 } catch (error) {
-  console.log("PUBLISHER_TEMPLATE_SCAN_ERROR " + String(error && error.stack ? error.stack : error));
+  console.log("FOLIO_TEMPLATE_SCAN_ERROR " + String(error && error.stack ? error.stack : error));
 }

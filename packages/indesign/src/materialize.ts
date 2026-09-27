@@ -6,7 +6,7 @@ import type {
   SemanticBlock,
   SemanticDocument,
   StyleRole
-} from "@publisher/contracts";
+} from "@folio/contracts";
 
 /**
  * Host-independent description of the work the InDesign driver performs for a

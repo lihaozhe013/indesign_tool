@@ -1,5 +1,5 @@
-import type { Diagnostic, SemanticBlock } from "@publisher/contracts";
-import type { ParseArticleResult } from "@publisher/core";
+import type { Diagnostic, SemanticBlock } from "@folio/contracts";
+import type { ParseArticleResult } from "@folio/core";
 
 export interface PanelBlockPreview {
   id: string;

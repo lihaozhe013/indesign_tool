@@ -2,7 +2,7 @@
 
 ## Product boundary
 
-Folio Desktop is a local macOS app built with Tauri 2, React, TypeScript, and Rust. The user works in a WebView. Rust owns local file dialogs, Markdown writes, asset checks, staged output, and the InDesign process bridge. The UXP `.idjs` script owns all InDesign DOM calls. The existing CLI remains an offline developer interface.
+Folio is a local macOS app built with Tauri 2, React, TypeScript, and Rust. The user works in a WebView. Rust owns local file dialogs, Markdown writes, asset checks, staged output, and the InDesign process bridge. The UXP `.idjs` script owns all InDesign DOM calls. The existing CLI remains an offline developer interface.
 
 The product supports InDesign 2026 and templates that already carry semantic labels under `com.publisher.role`. The first release does not include template annotation or role editing. A generated document is saved as a new output; the selected template is never used as the output path. Local builds produce an ad-hoc signed macOS `.app`; DMG packaging and Apple Developer ID distribution are deferred.
 

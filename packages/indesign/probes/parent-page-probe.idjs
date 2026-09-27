@@ -131,5 +131,5 @@ try {
   result.success = result.success
     && result.scratchDocumentClosed
     && result.openDocumentCountAfter === result.openDocumentCountBefore;
-  console.log("PUBLISHER_PARENT_PAGE_PROBE_V4 " + JSON.stringify(result));
+  console.log("FOLIO_PARENT_PAGE_PROBE_V4 " + JSON.stringify(result));
 }

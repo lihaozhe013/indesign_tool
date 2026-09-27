@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { makeInventory } from "@publisher/test-support";
+import { makeInventory } from "@folio/test-support";
 import { compileTemplate } from "./index.js";
 
 describe("compileTemplate", () => {

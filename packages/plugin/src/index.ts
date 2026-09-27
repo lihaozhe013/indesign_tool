@@ -1,4 +1,4 @@
-import { parseArticle } from "@publisher/core";
+import { parseArticle } from "@folio/core";
 import { createPanelValidationModel, type PanelBlockPreview, type PanelValidationModel } from "./panel-model.js";
 
 const sampleArticle = `# A better publishing workflow
@@ -12,7 +12,7 @@ Use headings, paragraphs, quotes, and standalone images to describe the article.
 > InDesign remains responsible for typography and text composition.
 `;
 
-export function mountPublisherPanel(panelDocument: Document = document): void {
+export function mountFolioPanel(panelDocument: Document = document): void {
   const query = <T extends Element>(selector: string): T | null => panelDocument.querySelector(selector) as T | null;
   const input = query<HTMLTextAreaElement>("#article-input");
   const validateButton = query<HTMLButtonElement>("#validate-article");
@@ -150,4 +150,4 @@ export function mountPublisherPanel(panelDocument: Document = document): void {
   }));
 }
 
-if (document.querySelector("#publisher-panel")) mountPublisherPanel(document);
+if (document.querySelector("#folio-panel")) mountFolioPanel(document);

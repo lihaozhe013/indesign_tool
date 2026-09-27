@@ -29,7 +29,7 @@ for (const doc of items(app.documents)) {
     modified: read(function () { return doc.modified; }, null)
   });
 }
-console.log("PUBLISHER_OPEN_DOCUMENTS_V1 " + JSON.stringify({
+console.log("FOLIO_OPEN_DOCUMENTS_V1 " + JSON.stringify({
   probeVersion: 1,
   capability: "list-open-documents",
   count: app.documents.length,

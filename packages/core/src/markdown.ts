@@ -3,7 +3,7 @@ import type {
   SemanticBlock,
   SemanticDocument,
   TextRun
-} from "@publisher/contracts";
+} from "@folio/contracts";
 import remarkFrontmatter from "remark-frontmatter";
 import remarkGfm from "remark-gfm";
 import remarkParse from "remark-parse";

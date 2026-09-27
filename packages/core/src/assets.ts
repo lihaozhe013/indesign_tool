@@ -1,4 +1,4 @@
-import type { Diagnostic, SemanticDocument } from "@publisher/contracts";
+import type { Diagnostic, SemanticDocument } from "@folio/contracts";
 
 export type AssetAvailability = (source: string) => boolean;
 

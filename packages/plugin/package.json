@@ -1,10 +1,10 @@
 {
-  "name": "@publisher/plugin",
+  "name": "@folio/plugin",
   "version": "0.1.0",
   "type": "module",
   "dependencies": {
-    "@publisher/contracts": "workspace:*",
-    "@publisher/core": "workspace:*"
+    "@folio/contracts": "workspace:*",
+    "@folio/core": "workspace:*"
   },
   "scripts": {
     "build": "tsc -b && esbuild src/index.ts --bundle --format=iife --platform=browser --target=es2020 --outfile=dist/index.js",

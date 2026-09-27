@@ -1,5 +1,5 @@
 {
-  "name": "structured-publishing-toolkit",
+  "name": "folio",
   "private": true,
   "scripts": {
     "build": "pnpm -r --if-present build",
@@ -7,9 +7,9 @@
     "lint": "eslint .",
     "test": "pnpm build && vitest run",
     "typecheck": "tsc -b",
-    "desktop:dev": "pnpm --filter @publisher/desktop tauri dev",
-    "desktop:build": "pnpm --filter @publisher/desktop tauri build",
-    "validate": "pnpm typecheck && pnpm lint && pnpm test && pnpm --filter @publisher/desktop rust:test"
+    "desktop:dev": "pnpm --filter @folio/desktop tauri dev",
+    "desktop:build": "pnpm --filter @folio/desktop tauri build",
+    "validate": "pnpm typecheck && pnpm lint && pnpm test && pnpm --filter @folio/desktop rust:test"
   },
   "devDependencies": {
     "@types/mdast": "^4.0.4",

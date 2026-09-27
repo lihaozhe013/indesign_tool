@@ -115,5 +115,5 @@ try {
   result.success = result.success
     && result.scratchDocumentClosed
     && result.openDocumentCountAfter === result.openDocumentCountBefore;
-  console.log("PUBLISHER_ANCHOR_PROBE_V2 " + JSON.stringify(result));
+  console.log("FOLIO_ANCHOR_PROBE_V2 " + JSON.stringify(result));
 }

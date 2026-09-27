@@ -91,5 +91,5 @@ try {
   result.success = result.success
     && result.scratchDocumentClosed
     && result.openDocumentCountAfter === result.openDocumentCountBefore;
-  console.log("PUBLISHER_TEXT_WRAP_PROBE_V2 " + JSON.stringify(result));
+  console.log("FOLIO_TEXT_WRAP_PROBE_V2 " + JSON.stringify(result));
 }

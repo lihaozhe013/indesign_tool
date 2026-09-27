@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { TemplateScan } from "@publisher/contracts";
+import type { TemplateScan } from "@folio/contracts";
 import { compileTemplate } from "./index.js";
 import { createTemplateInventory } from "./scan.js";
 import { deriveRoleAssignments } from "./roles.js";

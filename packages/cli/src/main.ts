@@ -2,10 +2,10 @@
 import { readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { basename, dirname, resolve } from "node:path";
-import type { CompiledTemplate, TemplateInventory, TemplateRoleAssignments, TemplateScan } from "@publisher/contracts";
-import { stableJson, validateSemanticDocument, validateTemplateInventory } from "@publisher/contracts";
-import { parseArticle, planDocument, validateAssetReferences } from "@publisher/core";
-import { compileTemplate, createTemplateInventory, deriveRoleAssignments } from "@publisher/template";
+import type { CompiledTemplate, TemplateInventory, TemplateRoleAssignments, TemplateScan } from "@folio/contracts";
+import { stableJson, validateSemanticDocument, validateTemplateInventory } from "@folio/contracts";
+import { parseArticle, planDocument, validateAssetReferences } from "@folio/core";
+import { compileTemplate, createTemplateInventory, deriveRoleAssignments } from "@folio/template";
 
 const cliArgs = process.argv.slice(2);
 const [command, subcommand, ...args] = cliArgs[0] === "--" ? cliArgs.slice(1) : cliArgs;
@@ -23,12 +23,12 @@ if (command === "--help" || command === "help" || !command) {
 } else if (["render", "dump", "export"].includes(command) || (command === "template" && subcommand === "inspect")) {
   unavailable(command === "template" ? "template inspect" : command);
 } else {
-  console.error("Unknown command. Run publisher --help.");
+  console.error("Unknown command. Run folio --help.");
   process.exitCode = 2;
 }
 
 async function parseCommand(filePath: string | undefined): Promise<void> {
-  if (!filePath) return usageError("publisher article parse <article.md>");
+  if (!filePath) return usageError("folio article parse <article.md>");
   const source = await readText(filePath);
   const result = parseArticle(source, { sourceId: basename(filePath) });
   if (result.document) {
@@ -41,7 +41,7 @@ async function parseCommand(filePath: string | undefined): Promise<void> {
 }
 
 async function validateTemplateCommand(filePath: string | undefined): Promise<void> {
-  if (!filePath) return usageError("publisher template validate <inventory.json>");
+  if (!filePath) return usageError("folio template validate <inventory.json>");
   const raw = await readJson(filePath);
   const schemaDiagnostics = validateTemplateInventory(raw);
   if (schemaDiagnostics.some((item) => item.severity === "error")) {
@@ -55,7 +55,7 @@ async function validateTemplateCommand(filePath: string | undefined): Promise<vo
 }
 
 async function compileTemplateCommand(scanPath: string | undefined, assignmentsPath: string | undefined): Promise<void> {
-  if (!scanPath) return usageError("publisher template compile <scan.json> [roles.json]");
+  if (!scanPath) return usageError("folio template compile <scan.json> [roles.json]");
   const scan = (await readJson(scanPath)) as TemplateScan;
   // Roles come from designer labels unless an explicit assignments file is
   // supplied, so the compiled manifest is generated rather than hand-authored.
@@ -94,7 +94,7 @@ async function planCommand(args: string[]): Promise<void> {
   const articlePath = args[0];
   const templateIndex = args.indexOf("--template");
   const templatePath = templateIndex >= 0 ? args[templateIndex + 1] : undefined;
-  if (!articlePath || !templatePath) return usageError("publisher plan <article.md> --template <inventory.json>");
+  if (!articlePath || !templatePath) return usageError("folio plan <article.md> --template <inventory.json>");
 
   const [source, raw] = await Promise.all([readText(articlePath), readJson(templatePath)]);
   const article = parseArticle(source, { sourceId: basename(articlePath) });
@@ -154,17 +154,17 @@ function usageError(usage: string): void {
 
 function printHelp(): void {
   process.stdout.write([
-    "Folio Publishing Toolkit",
+    "Folio CLI",
     "",
     "Commands:",
-    "  publisher article parse <article.md>",
-    "  publisher template validate <inventory.json>",
-    "  publisher template compile <scan.json> [roles.json]",
-    "  publisher plan <article.md> --template <inventory.json>",
-    "  publisher template inspect <template.indd>   Requires a connected InDesign host",
-    "  publisher render <article.md>                Requires a connected InDesign host",
-    "  publisher dump <document.indd>                Requires a connected InDesign host",
-    "  publisher export <document.indd>              Requires a connected InDesign host",
+    "  folio article parse <article.md>",
+    "  folio template validate <inventory.json>",
+    "  folio template compile <scan.json> [roles.json]",
+    "  folio plan <article.md> --template <inventory.json>",
+    "  folio template inspect <template.indd>   Requires a connected InDesign host",
+    "  folio render <article.md>                Requires a connected InDesign host",
+    "  folio dump <document.indd>                Requires a connected InDesign host",
+    "  folio export <document.indd>              Requires a connected InDesign host",
     ""
   ].join("\n"));
 }

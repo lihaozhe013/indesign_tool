@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { CompiledTemplate, DocumentIR, SemanticDocument } from "@publisher/contracts";
+import type { CompiledTemplate, DocumentIR, SemanticDocument } from "@folio/contracts";
 import { materializeMainStory, planHostOperations } from "./materialize.js";
 
 const template: CompiledTemplate = {

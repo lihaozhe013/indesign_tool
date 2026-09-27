@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import fc from "fast-check";
-import { stableJson, validateSemanticDocument } from "@publisher/contracts";
+import { stableJson, validateSemanticDocument } from "@folio/contracts";
 import { parseArticle } from "./markdown.js";
 import { validateAssetReferences } from "./assets.js";
 

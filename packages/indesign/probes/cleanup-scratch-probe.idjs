@@ -36,7 +36,7 @@ for (const doc of items(app.documents)) {
     remaining.push(name + ":" + String(error && error.message ? error.message : error));
   }
 }
-console.log("PUBLISHER_CLEANUP_SCRATCH_V1 " + JSON.stringify({
+console.log("FOLIO_CLEANUP_SCRATCH_V1 " + JSON.stringify({
   probeVersion: 1,
   capability: "close-leaked-scratch-documents",
   closed: closed,

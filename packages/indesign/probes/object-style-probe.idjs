@@ -34,7 +34,7 @@ try {
     contents: "Object style probe"
   });
 
-  const style = scratchDocument.objectStyles.add({ name: "Publisher Probe Frame" });
+  const style = scratchDocument.objectStyles.add({ name: "Folio Probe Frame" });
   style.insertLabel(ROLE_KEY, "probe-object-style-frame");
   result.styleDefined = {
     name: String(read(function () { return style.name; }, "")),
@@ -80,7 +80,7 @@ try {
   };
 
   result.checks = {
-    styleNamed: result.styleDefined.name === "Publisher Probe Frame",
+    styleNamed: result.styleDefined.name === "Folio Probe Frame",
     styleLabel: result.styleDefined.label === "probe-object-style-frame",
     styleAppliedById: result.application.appliedStyleId !== null
       && result.application.appliedStyleId === result.styleDefined.id,
@@ -106,5 +106,5 @@ try {
   result.success = result.success
     && result.scratchDocumentClosed
     && result.openDocumentCountAfter === result.openDocumentCountBefore;
-  console.log("PUBLISHER_OBJECT_STYLE_PROBE_V1 " + JSON.stringify(result));
+  console.log("FOLIO_OBJECT_STYLE_PROBE_V1 " + JSON.stringify(result));
 }
