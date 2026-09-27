@@ -45,4 +45,4 @@ The UXP script must use global/top-level `await` for file operations. Adobe docu
 
 The canonical dump records page roles and order, story paragraphs and styles, semantic block IDs, labeled frame roles and bounds, overset, missing links, and font status. Keep text checks exact for non-image paragraphs. InDesign owns composition and may produce font warnings; a font warning is visible but does not silently become a layout failure.
 
-For PDF acceptance, compare exported page count with the InDesign document page count. Raster review uses the per-page PNGs from the same host version and installed font set. Visual baselines remain separate from normal CI.
+For PDF acceptance, compare exported page count with the InDesign document page count. Raster review uses the per-page PNGs from the same host version and installed font set. Review visual baselines manually; they are outside the offline validation lane.
