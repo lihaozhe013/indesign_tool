@@ -10,6 +10,18 @@ use tauri::AppHandle;
 use uuid::Uuid;
 
 mod host_bridge;
+mod locale;
+
+/// Returns the stored interface locale, or `None` before the user has chosen one.
+#[tauri::command]
+fn get_locale(app: AppHandle) -> Option<String> {
+    locale::read(&app)
+}
+
+#[tauri::command]
+fn set_locale(app: AppHandle, locale: String) -> Result<(), String> {
+    locale::apply(&app, &locale)
+}
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -487,8 +499,21 @@ pub fn run() {
             check_assets,
             prepare_output_stage,
             finalize_output_stage,
-            discard_output_stage
+            discard_output_stage,
+            get_locale,
+            set_locale
         ])
+        .setup(|app| {
+            locale::attach_menu_items(app.handle())?;
+            Ok(())
+        })
+        .on_menu_event(|app, event| {
+            if let Some(locale) = locale::from_menu_id(event.id().as_ref()) {
+                if let Err(error) = locale::apply(app, locale) {
+                    eprintln!("Could not apply interface locale {locale}: {error}");
+                }
+            }
+        })
         .run(tauri::generate_context!())
         .expect("error while running Structured Publisher");
 }

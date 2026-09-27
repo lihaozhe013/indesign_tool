@@ -1,5 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type { HostJob, HostJobResult } from "@publisher/contracts";
+import { LOCALE_CHANGED_EVENT, type Locale } from "./i18n/locale.js";
 
 export interface OpenedTextFile {
   path: string;
@@ -79,4 +81,20 @@ export function finalizeOutputStage(outputPath: string, stageId: string, expecte
 
 export function discardOutputStage(outputPath: string, stageId: string): Promise<void> {
   return invoke("discard_output_stage", { outputPath, stageId });
+}
+
+/**
+ * Rust owns the stored preference so the native menu and the WebView cannot disagree.
+ * Returns null until the user has chosen a locale.
+ */
+export function getStoredLocale(): Promise<Locale | null> {
+  return invoke("get_locale");
+}
+
+export function setStoredLocale(locale: Locale): Promise<void> {
+  return invoke("set_locale", { locale });
+}
+
+export function onLocaleChanged(handler: (locale: Locale) => void): Promise<UnlistenFn> {
+  return listen<string>(LOCALE_CHANGED_EVENT, ({ payload }) => handler(payload as Locale));
 }

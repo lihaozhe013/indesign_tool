@@ -1,1 +1,1 @@
-{"default":{"identifier":"default","description":"Base capabilities for the desktop window, including locale preference storage.","local":true,"windows":["main"],"permissions":["core:default","store:default"]}}
+{"default":{"identifier":"default","description":"Base capabilities for the desktop window.","local":true,"windows":["main"],"permissions":["core:default"]}}

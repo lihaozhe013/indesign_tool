@@ -1,8 +1,10 @@
 // @vitest-environment happy-dom
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import en from "./locales/en.json";
 import zhHans from "./locales/zh-Hans.json";
-import { isSupportedLocale, resolveLocale, systemLocale, supportedLocales } from "./locale.js";
+import { isSupportedLocale, LOCALE_CHANGED_EVENT, resolveLocale, systemLocale, supportedLocales } from "./locale.js";
 
 type Catalog = { [key: string]: string | Catalog };
 
@@ -139,5 +141,17 @@ describe("locale resolution", () => {
     Object.defineProperty(navigator, "languages", { value: ["en-GB"], configurable: true });
     expect(systemLocale()).toBe("en");
     Object.defineProperty(navigator, "languages", { value: original, configurable: true });
+  });
+
+  it("keeps the locale-changed event name aligned with the Rust menu bridge", () => {
+    // The View menu notifies the WebView by event name, so a rename on either side would
+    // silently stop the menu from working. The constant cannot be shared across the boundary.
+    // Vitest runs from the workspace root, so resolve the Rust source from there.
+    const rust = readFileSync(
+      resolve(process.cwd(), "packages/desktop/src-tauri/src/locale.rs"),
+      "utf8"
+    );
+    const declared = /pub const LOCALE_CHANGED_EVENT: &str = "([^"]+)";/.exec(rust);
+    expect(declared?.[1], "Rust LOCALE_CHANGED_EVENT is missing").toBe(LOCALE_CHANGED_EVENT);
   });
 });

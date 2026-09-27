@@ -9,7 +9,6 @@
     "@publisher/indesign": "workspace:*",
     "@publisher/template": "workspace:*",
     "@tauri-apps/api": "^2.12.0",
-    "@tauri-apps/plugin-store": "^2.5.0",
     "i18next": "^26.4.2",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",

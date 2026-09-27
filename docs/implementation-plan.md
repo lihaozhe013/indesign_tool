@@ -22,7 +22,9 @@ The core, contracts, and template compiler do not import Node, Tauri, UXP, or In
 
 ## UI localization
 
-The WebView interface is localized for `en` and `zh-Hans` with `i18next` and `react-i18next`. `packages/desktop/src/i18n/locales/en.json` is the source of truth and `zh-Hans.json` must carry the same key set; `packages/desktop/src/i18n/catalog.test.ts` fails the build otherwise. Progress status is held as a key plus interpolation values rather than a rendered string so a language switch repaints in-flight status. The locale comes from an explicit `settings.json` preference written through `tauri-plugin-store`, then the browser language list, then English.
+The WebView interface is localized for `en` and `zh-Hans` with `i18next` and `react-i18next`. `packages/desktop/src/i18n/locales/en.json` is the source of truth and `zh-Hans.json` must carry the same key set; `packages/desktop/src/i18n/catalog.test.ts` fails the build otherwise. Progress status is held as a key plus interpolation values rather than a rendered string so a language switch repaints in-flight status.
+
+Rust owns the stored preference and the native View menu, which is where the language check items live; the WebView owns only the rendered language and receives a `locale-changed` event. The locale comes from a stored preference in `settings.json`, then the browser language list, then English, and a first run writes the resolved value back so the menu checkmark matches. `packages/desktop/src-tauri/src/locale.rs` extends the default menu rather than replacing it, which keeps the Edit accelerators the Markdown editor depends on.
 
 The Folio product name, InDesign, the Markdown format name, the native window title, and the bundle name are never translated. Diagnostic messages, Rust command errors, and UXP host errors stay English, which leaves a Chinese interface mixed-language. See [ADR 0008](decisions/0008-ui-localization.md) for the boundary and the route to follow if that changes.
 

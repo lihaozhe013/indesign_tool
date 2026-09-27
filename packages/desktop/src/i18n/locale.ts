@@ -2,6 +2,9 @@ export const supportedLocales = ["en", "zh-Hans"] as const;
 
 export type Locale = (typeof supportedLocales)[number];
 
+/** Must match the event name emitted by the Rust locale module. */
+export const LOCALE_CHANGED_EVENT = "locale-changed";
+
 export function isSupportedLocale(value: unknown): value is Locale {
   return typeof value === "string" && (supportedLocales as readonly string[]).includes(value);
 }

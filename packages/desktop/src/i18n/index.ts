@@ -2,7 +2,7 @@ import i18next, { type i18n as I18nInstance } from "i18next";
 import { initReactI18next } from "react-i18next";
 import en from "./locales/en.json";
 import zhHans from "./locales/zh-Hans.json";
-import { type Locale } from "./locale.js";
+import { isSupportedLocale, type Locale } from "./locale.js";
 
 const resources = {
   en: { translation: en },
@@ -30,6 +30,21 @@ export function setupI18n(locale: Locale): I18nInstance {
 
 export function applyDocumentLocale(locale: Locale): void {
   document.documentElement.lang = locale;
+}
+
+type LanguageController = Pick<I18nInstance, "language" | "changeLanguage">;
+
+/**
+ * Builds the handler for locale changes that originate outside the WebView, currently only the
+ * native View menu. Unsupported payloads and repeats are ignored, so the round trip Rust
+ * performs for a sidebar change cannot feed back into a second language change.
+ */
+export function createLocaleApplier(instance: LanguageController): (next: unknown) => void {
+  return (next) => {
+    if (!isSupportedLocale(next) || next === instance.language) return;
+    void instance.changeLanguage(next);
+    applyDocumentLocale(next);
+  };
 }
 
 export { isSupportedLocale, resolveLocale, systemLocale, supportedLocales } from "./locale.js";

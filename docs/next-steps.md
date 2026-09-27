@@ -2,7 +2,7 @@
 
 ## Implementation status
 
-The product path has moved from an InDesign panel to a Tauri desktop app. The React interface, Rust file commands, HostJob v1 bridge, and UXP executor are implemented. The WebView interface is localized for `en` and `zh-Hans` with a stored locale preference. The synthetic template generator now declares the subtitle, link, and inline-image roles, but the ignored `.indd` and scan result were generated before that revision and omit those roles. Regenerate and inspect the current fixture before host-backed acceptance. `pnpm validate` passes with 69 JavaScript/TypeScript tests and 14 Rust tests. `pnpm desktop:build` produces a valid ad-hoc signed macOS `.app` with its Apple Events usage string.
+The product path has moved from an InDesign panel to a Tauri desktop app. The React interface, Rust file commands, HostJob v1 bridge, and UXP executor are implemented. The WebView interface is localized for `en` and `zh-Hans`. Rust owns the stored preference and the View menu language items; the sidebar switch and the menu item are two controls for the same value. The synthetic template generator now declares the subtitle, link, and inline-image roles, but the ignored `.indd` and scan result were generated before that revision and omit those roles. Regenerate and inspect the current fixture before host-backed acceptance. `pnpm validate` passes with 73 JavaScript/TypeScript tests and 17 Rust tests. `pnpm desktop:build` produces a valid ad-hoc signed macOS `.app` with its Apple Events usage string.
 
 The remaining gate is full host-backed acceptance through the packaged app. Keep this list current as each case is exercised.
 
@@ -17,7 +17,7 @@ The remaining gate is full host-backed acceptance through the packaged app. Keep
 - [ ] Run long Chinese/mixed-language, image/caption, and forced-overflow articles; compare source text and output page count.
 - [ ] Run missing-resource, unavailable-host, denied-permission, timeout, and damaged-result cases; confirm no partial final set remains.
 - [ ] Verify the first Apple Events permission prompt in the packaged app and inspect the built Info.plist.
-- [ ] Switch the packaged app to Simplified Chinese, reload, and confirm the locale persists; check CJK letter-spacing and leading in the sidebar, preflight, and preview panels.
+- [x] Switch the packaged app to Simplified Chinese from the sidebar and from the View menu, reload, and confirm the stored locale drives the WebView and the menu checkmark; check CJK letter-spacing and leading in the sidebar, preflight, and preview panels.
 - [x] Run `pnpm validate` and `pnpm desktop:build` after the implementation fixes.
 
 ## Known implementation constraints

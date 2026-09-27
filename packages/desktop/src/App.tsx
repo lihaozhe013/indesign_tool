@@ -15,7 +15,6 @@ import { createIndesignAdapter, planHostOperations } from "@publisher/indesign";
 import { parseArticle, publishDocument } from "@publisher/core";
 import { compileTemplate, createTemplateInventory, deriveRoleAssignments } from "@publisher/template";
 import { applyDocumentLocale, supportedLocales, type Locale } from "./i18n/index.js";
-import { saveLocale } from "./i18n/preference.js";
 import { verifyDocumentDump } from "./publication-verification.js";
 import {
   checkAssets,
@@ -29,7 +28,8 @@ import {
   prepareOutputStage,
   readPreview,
   runHostJob,
-  saveMarkdown
+  saveMarkdown,
+  setStoredLocale
 } from "./bridge.js";
 import type { HostAvailability, OutputPaths, OutputStage } from "./bridge.js";
 
@@ -100,10 +100,11 @@ export function App() {
     document.title = t("app.title");
   }, [t, locale]);
 
+  // Rust owns the stored preference and the native menu checkmark; this only drives the WebView.
   const changeLocale = useCallback((next: Locale) => {
+    void setStoredLocale(next).catch(() => undefined);
     void i18n.changeLanguage(next);
     applyDocumentLocale(next);
-    void saveLocale(next);
   }, [i18n]);
 
   const refreshHost = useCallback(async () => {
