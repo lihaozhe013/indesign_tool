@@ -26,7 +26,7 @@ Object, graphic, anchor, wrap, export, and font probes cover the remaining place
 - Immediately after `save()` + `close()`, `app.documents.length` can transiently include the save-as copy that InDesign finalizes on its own; the count usually returns to baseline within a second. Save probes record the immediate count and tolerate one extra document, then confirm the environment with `open-documents-probe.idjs`.
 - Frame ownership follows geometric bounds, not the collection targeted: on a two-page parent spread, positive-x bounds land on the right page, and out-of-page bounds place a frame on the pasteboard with a null `parentPage`. Derive frame geometry from the target page's `bounds`.
 - Enum-like values (wrap mode, link status, fit options) come back as wrapper objects: `Object.keys` is empty and identity comparison fails, so compare `String(value)`.
-- UXP file-system writes are gated in a Scripts Panel execution: `storage.localFileSystem.getTemporaryFolder()` and `folder.createFile(name)` resolve (and create a 0-byte file), but `file.write`, `file.read`, and `file.delete` never settle, and `file.open` does not exist. The queued job/result transport therefore requires a real UXP panel with manifest permissions, loaded through the UXP Developer Tool.
+- Correction (2026-09-27): the earlier file-system probe used an unawaited async IIFE. That execution form did not keep the UXP script alive for pending file operations. A corrected top-level-await script completed temporary-file write, read, and delete on InDesign 21.0.0.192 / DOM 21.0 / UXP 9.0.3-local. See `docs/implementation-plan.md` for the desktop HostJob transport.
 - AppleScript `do script ... with arguments` values are not delivered to a `.idjs` script; its wrapped `arguments` object contains only internal values (exports, script path, directory). Pass data through generated script content or a panel transport instead.
 
 ## Automated probe execution
@@ -41,7 +41,7 @@ node scripts/run-indesign-probe.mjs packages/indesign/probes/<probe>.idjs \
   --out artifacts/host/indesign-21.0.0.192/probe-run/<name>.json
 ```
 
-This channel is for probe execution and evidence capture only. Product code must never shell out to AppleScript; persistent-panel work still requires the UXP Developer Tool, and adapter DOM access stays in `packages/indesign`.
+This channel is used by both development probes and the macOS desktop host bridge. Product Rust code starts InDesign through Apple Events; all UXP script source and direct InDesign DOM access stay in `packages/indesign`.
 
 
 ## Procedure
@@ -69,7 +69,7 @@ This channel is for probe execution and evidence capture only. Product code must
 | Export | Can configured exports run without dialogs? | File existence, page count, and export settings | Pass: multi-page PDF and per-page PNG written |
 | Font substitution | Can missing/substituted fonts be detected reliably? | Host-reported font state and diagnostic mapping | Pass for detection: `status === NOT_AVAILABLE`; substitution on a real missing-font document not exercised |
 | Stable identity | Which IDs remain stable across save/reopen and duplicate operations? | Identity comparison across operations | Pass for page, page item, story, and style ids; `Document.id` is session-local |
-| UXP file access | Can the plugin request a workspace folder and exchange job/result files? | Permission flow, read/write, polling, and restart behavior | Blocked in Scripts Panel: createFile works, write/read/delete hang; needs panel manifest + UXP Developer Tool |
+| UXP file access | Can a UXP script read, write, and delete per-job local files? | File URLs, top-level await, and a complete temporary-file round trip | Pass: top-level-await write/read/delete completed on InDesign 21.0.0.192; the desktop bridge uses an isolated app-cache folder per job |
 
 ## Official Adobe references
 

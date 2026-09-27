@@ -1,5 +1,7 @@
 # InDesign Structured Publishing Toolkit
 
+> Historical specification: the current product direction is a standalone Tauri desktop app, not an InDesign panel. See [ADR 0007](docs/decisions/0007-tauri-desktop-app.md) and [the desktop implementation plan](docs/implementation-plan.md) for the active scope.
+
 ## 0. Document Status
 
 Status: Initial product and architecture specification.

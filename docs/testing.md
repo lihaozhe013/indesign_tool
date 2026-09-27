@@ -2,39 +2,47 @@
 
 ## Offline lane
 
-The default lane does not require Adobe software:
+Run:
 
 ```bash
-pnpm typecheck
-pnpm lint
-pnpm test
-pnpm build
+pnpm validate
+pnpm desktop:build
 ```
 
-Unit tests cover parsing, schema validation, template compilation, style-role resolution, page planning, asset diagnostics, host-feedback handling, and queue result ordering. Fixtures include long articles, mixed-language text and punctuation, long titles, quotes, images/captions, missing images, and unsupported blocks. Property checks exercise Unicode text preservation and planner termination. Canonical JSON tests cover serialization round trips. Architecture checks prevent core modules from importing Node, UXP, or InDesign APIs.
+The default validation does not require Adobe software. TypeScript/Vitest cover Markdown parsing, schema validation, template compilation, page planning, diagnostics, reflow, deterministic host operations, and package boundaries. Rust tests cover AppleScript quoting, generated per-job scripts, result validation, file extensions, asset URL checks, and staged output finalization.
 
-Panel tests run in `happy-dom` without loading InDesign. They exercise validation, semantic outline rendering, diagnostics, tab state, edited/stale input, and safe text rendering using the actual panel markup. `pnpm ui:dev` provides a local browser preview for visual review. Browser appearance is not treated as proof of UXP compatibility.
+The desktop build checks Vite output, Tauri configuration, the macOS bundle metadata, and the Apple Events usage description. On macOS, verify the built app bundle signature with:
 
-The TypeScript source target is ESNext with ES2020 library APIs. The UXP panel bundle is lowered to ES2020 pending a runtime contract check against the minimum supported InDesign version. The plugin type-checks against Adobe's UXP type definitions without the browser `DOM` library.
+```bash
+codesign --verify --deep --strict "packages/desktop/src-tauri/target/release/bundle/macos/Structured Publisher.app"
+```
 
-The GitHub Actions offline lane installs from the frozen lockfile and runs `pnpm validate`. It does not install or require Adobe software.
+The local build uses an ad-hoc signature; it does not prove that InDesign accepts a job or that a real template composes correctly.
 
-Use `FakeHostAdapter` to test orchestration without a host. The core must react to the host's overset report rather than estimating fit. Keep snapshots deterministic and include expected diagnostic codes, not only rendered strings.
+## InDesign host lane
 
-## Host contract lane
+Use InDesign 2026 on macOS and a disposable synthetic template. The generator is `packages/indesign/probes/synthetic-template-probe.idjs`; regenerate `artifacts/host/indesign-21.0.0.192/templates/synthetic-cover-article.indd` because earlier copies were zero bytes.
 
-Run `.idjs` probes from the InDesign Scripts panel or non-interactively with `scripts/run-indesign-probe.mjs`, which executes them through the macOS AppleScript `do script ... language uxpscript` channel and harvests the tagged record from the newest UXP log; UXP Developer Tool is needed to load/debug the designer plugin, not to execute these probes. Use disposable documents, record host/UXP/DOM versions, and save the probe reports. Verify each capability independently: paragraph and character styles, object styles, labels, parent pages, page duplication, story creation and threading, overset, anchored objects, placed graphics, fitting, text wrap, save/reopen persistence, export, font substitution, and stable object identity. Add contract tests only after a behavior has been observed on the supported host.
+Run the desktop app and verify:
 
-`packages/indesign/probes/host-version-probe.idjs` reports host, UXP, and DOM versions. `packages/indesign/probes/template-scan.idjs` emits the versioned structural scan for an already-open disposable document. `contract-probe.idjs` is a basic count/label smoke probe. The host scans confirmed host `21.0.0.192`, DOM `21.0`, UXP `uxp-9.0.3-local`, 20 pages, 6 parent spreads, 261 stories, and enumeration of 893 page items. A scratch-document probe confirmed paragraph style creation, application, and readback, then closed the scratch document without saving; a second scratch-document probe confirmed the same for a character style. Keyed script labels were verified in memory and across a separate save/close/reopen run, including style objects, so label persistence is established and ADR 0003 is decided. Story separators, story creation, two-frame threading, overset clearing after added capacity, parent-page assignment/add/duplicate, parent-frame adoption, and a full structure save/reopen with stable ids are verified. Object styles, graphic placement with link status and content-scaling fit, inline anchoring, text wrap with recomposition, dialog-free PDF/PNG export, and missing-font detection by font status are verified. The queued job/result transport is blocked in the Scripts Panel context because UXP file write/read/delete never settle; it needs the panel manifest and UXP Developer Tool. An AppleScript `do script` bridge cannot deliver arguments to `.idjs`.
+1. Template scan derives Cover, Article, `article-flow`, `hero-title`, and required paragraph styles from labels.
+2. A basic article produces an editable INDD, a PDF, and one PNG preview per page.
+3. Long Chinese and mixed Chinese/English text triggers InDesign overflow, adds pages, and retains every block and character after save/reopen.
+4. A standalone image with a caption appears in the article and cover image frame; image links are present and captions retain their text.
+5. A deliberately missing image is reported and staged files are discarded.
+6. An absent InDesign host, denied Apple Events permission, a timed-out script, and a malformed result produce explicit errors and no final deliverables.
+7. The packaged `.app` contains `NSAppleEventsUsageDescription`; launch it and complete the first control-InDesign permission flow.
 
-The initial host scan is saved under the ignored `artifacts/host/indesign-21.0.0.192/probe-run/` directory. It reports 15 paragraph styles, 20 character styles, 9 object styles, two missing link instances for one JPG, seven out-of-date links, one substituted font face, and no overset stories. The scan has passed `TemplateScan v1` validation. The current CI workflow does not run this lane; add a separate host lane after the remaining disposable-document contracts are exercised and recorded.
+Keep host artifacts under ignored `artifacts/host/`; do not commit user documents, templates, linked images, PDFs, or fonts.
 
-## Canonical document dumps
+## Contract details
 
-Compare `DocumentDump v1` after sorting by document order and stable semantic references. Preserve paragraph text and qualified style names, semantic page roles, frame threading and rounded bounds, asset/font issues, and story overset. Exclude timestamps, generated host IDs, selection, and other volatile state unless a future invariant requires them.
+Use the host job file as the input record and save the returned `HostJobResult v1`. Each job uses its own UUID directory. Verify Rust rejects a mismatched ID, unsupported version, malformed JSON, absent completion marker, and timeout. Run jobs serially because InDesign is not a concurrent rendering service.
 
-## Golden and visual regression lane
+The UXP script must use global/top-level `await` for file operations. Adobe documents `getEntryWithUrl` and local file URLs in the [UXP file system API](https://developer.adobe.com/indesign/uxp/uxp/reference-js/Modules/uxp/Persistent%20File%20Storage/FileSystemProvider/) and top-level async scripts in [Global await](https://developer.adobe.com/indesign/uxp/scripts/concepts/global-await/). The corrected temporary file round trip was verified on InDesign 21.0.0.192 / DOM 21.0 / UXP 9.0.3-local.
 
-Use a synthetic template first, then a designer-provided template. Compare both planned `DocumentIR` and the canonical host dump. Export with pinned InDesign version, fonts, template revision, and export settings. Rasterize exports at a fixed resolution and compare against reviewed image baselines with a documented tolerance for antialiasing. Store failing dumps, job files, and exports as CI artifacts for diagnosis. Do not accept visual baselines generated on an unknown host/font set.
+## Document verification
 
-InDesign 2026 and a real designer report template are present. The initial read-only host probe completed, but the remaining adapter contracts are pending. A synthetic publishing template and approved visual baseline are also pending. Host contracts and visual regression remain separate from normal CI, which remains useful and required without them.
+The canonical dump records page roles and order, story paragraphs and styles, semantic block IDs, labeled frame roles and bounds, overset, missing links, and font status. Keep text checks exact for non-image paragraphs. InDesign owns composition and may produce font warnings; a font warning is visible but does not silently become a layout failure.
+
+For PDF acceptance, compare exported page count with the InDesign document page count. Raster review uses the per-page PNGs from the same host version and installed font set. Visual baselines remain separate from normal CI.

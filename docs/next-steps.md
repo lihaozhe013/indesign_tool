@@ -1,72 +1,33 @@
-# Next Steps
+# Next steps
 
-This document is the working handoff plan from the offline publishing foundation to a verified InDesign publishing path. It records the current evidence and the order of work; it does not treat Adobe documentation as proof that an unprobed behavior works.
+## Implementation status
 
-## Current Snapshot
+The product path has moved from an InDesign panel to a Tauri desktop app. The React interface, Rust file commands, HostJob v1 bridge, and UXP executor are implemented. The synthetic template generator now includes the subtitle, link, and inline-image roles used by the app's fixtures; regenerate the template before host-backed acceptance. `pnpm validate` passes with 58 JavaScript/TypeScript tests and 14 Rust tests. `pnpm desktop:build` produces a valid ad-hoc signed macOS `.app` with its Apple Events usage string.
 
-Status checked on 2026-09-24:
+The remaining gate is full host-backed acceptance through the packaged app. Keep this list current as each case is exercised.
 
-- The repository is on `main`, continuing from commit `a738b30`.
-- `pnpm validate` passes: type checking, lint, builds, and 47 tests.
-- InDesign 2026 is installed at `21.0.0.192`; the measured DOM version is `21.0` and UXP reports `uxp-9.0.3-local`.
-- The UXP Developer Tool is not installed. `.idjs` probes run either from the InDesign Scripts panel or non-interactively through `scripts/run-indesign-probe.mjs`, which uses the AppleScript `do script ... language uxpscript` channel and harvests the tagged record from the newest UXP log.
-- The read-only scan of the disposable Zijiang report copy passed `TemplateScan v1` validation. It found 20 pages, 261 stories, 893 page items, 15 paragraph styles, 20 character styles, and 9 object styles. It reported two missing-link instances for the same JPG, seven out-of-date links, one substituted font face, and no overset stories.
-- The paragraph-style scratch-document probe passed: it created and applied `Publisher Probe Body`, read it back, closed without saving, and restored the open-document count from 1 to 1.
-- The character-style scratch-document probe passed: it created and applied `Publisher Probe Emphasis`, read the applied style back, closed without saving, and restored the open-document count from 1 to 1. Two independent runs on 2026-09-24 produced the same passing record. In-memory only; save/reopen persistence is a separate probe.
-- The script-label probes passed in memory and across a separate save/close/reopen run: namespaced labels on document, page, text-frame, and style objects persist, and label-value lookup is reliable for both unique and duplicate matches. ADR 0003 is decided: `com.publisher.role` labels are the annotation mechanism; the sidecar fallback is rejected. Host hazards (`fullName` never settles, `getByName` does not exist, leaked hung probes corrupt counts) are recorded in the probe guide.
-- Story-flow, page, overset, and structure-persistence probes passed: `\r`/`\n` separator semantics, story creation through frames, two-frame threading with a shared parent story, overset clearing after added capacity with no text loss, parent-page assignment/add/duplicate, parent-frame adoption by `override`, and a full save/reopen that kept pages, master, adopted frame, threaded story, and named styles with stable ids. Frame ownership follows geometric bounds, so geometry must come from the target page.
-- Placement and output probes passed: object styles (`applyObjectStyle`), graphic placement with link/type/PPI readback, content-scaling fit, inline anchored graphics, text wrap that recomposes the story, dialog-free multi-page PDF and per-page PNG export, and missing-font detection through font `status`. UXP file write/read/delete never settle in a Scripts Panel execution, so the job/result transport is blocked until the UXP panel manifest and Developer Tool are available.
-- The synthetic Cover/Article template generator passed: two A4 portrait pages, one parent spread carrying role-labeled `article-flow` and `page-number` frames, a detached Cover page with `hero-title`/`hero-image` frames, and seven role-labeled styles using canonical role names. A second parent spread could not be created through `masterSpreads.add({...})` (invalid argument), so the Cover is page-level for now.
-- The template pipeline is now label-driven: `deriveRoleAssignments` builds role assignments from scan role labels, `createTemplateInventory` resolves a parent-page frame to the page that applies that parent, and the CLI `template compile <scan.json>` derives roles when no assignments file is given. `materializeMainStory` and `planHostOperations` in `packages/indesign` turn the document IR into paragraph-separated story text and a deterministic, serializable host plan.
-- InDesign is currently showing a modal dialog or alert, so document-level operations (close/save) fail until it is dismissed; a synthetic-template scan and the first end-to-end render still need a clean host.
-- The report is an inspection sample, not the initial publishing template. Do not force its 261 independent stories into the single main-article-story model.
+## Acceptance checklist
 
-Host probe evidence and procedures are in [the InDesign probe guide](indesign-probes/README.md). Local host artifacts live under the ignored `artifacts/host/indesign-21.0.0.192/` directory. Do not commit the designer's `.indd`, IDML, PDF, fonts, or linked assets.
+- [x] Tauri 2 + React + TypeScript workspace, valid ad-hoc signed macOS `.app`, and Apple Events metadata.
+- [x] Markdown open/edit/save, role-labeled template inspection, preflight diagnostics, output selection, progress state, previews, and open-output actions.
+- [x] Rust creates isolated job/result files, runs generated top-level-await `.idjs` scripts, serializes jobs, enforces timeout, and checks result IDs and schema.
+- [x] Synthetic Cover/Article template generation verified on InDesign 21.0.0.192.
+- [ ] Regenerate the synthetic template with the subtitle, link, and inline-image roles.
+- [ ] Run basic article through the built `.app`; verify editable INDD, PDF, and per-page PNGs.
+- [ ] Run long Chinese/mixed-language, image/caption, and forced-overflow articles; compare source text and output page count.
+- [ ] Run missing-resource, unavailable-host, denied-permission, timeout, and damaged-result cases; confirm no partial final set remains.
+- [ ] Verify the first Apple Events permission prompt in the packaged app and inspect the built Info.plist.
+- [x] Run `pnpm validate` and `pnpm desktop:build` after the implementation fixes.
 
-## Ordered Work Plan
+## Known implementation constraints
 
-### 1. Finish the character-style probe (done 2026-09-24)
+Only pre-labeled local templates are supported. The Cover page must provide a `hero-title` frame; Article needs one `article-flow` frame and the compiled style roles. Template role editing and real design-template acceptance are later milestones.
 
-The probe recorded `success: true` with matching created/applied names (`Publisher Probe Emphasis`), a scratch document closed without saving, and the open-document count restored from 1 to 1, on two independent runs. The passing record is saved in the ignored host-artifact directory and the probe matrix is updated. This verifies in-memory behavior only; it does not establish save/reopen persistence.
+The UXP runner launches with macOS Apple Events. A first run may be denied in System Settings; the UI should surface that error. The signed, notarized distribution flow is not part of this first local build.
 
-Probe execution is now automated: `scripts/run-indesign-probe.mjs` runs a `.idjs` probe via AppleScript `do script ... language uxpscript` (any POSIX path; no Scripts panel click and no UXP Developer Tool needed) and extracts the tagged JSON record from the newest UXP log.
+## Deferred
 
-### 2. Resolve the template-annotation mechanism (done 2026-09-24)
-
-Labels round-trip in memory on document, page, text-frame, and paragraph/character/object-style objects with the key `com.publisher.role`; unset keys read `""`; a second key is isolated. A labeled scratch document saved by string path, closed, and reopened in a separate run preserved every label, and label-value lookup returned correct unique and duplicate matches. `Page.id`/`PageItem.id` were stable across reopen while `Document.id` was session-local. ADR 0003 now selects keyed script labels; the object-name sidecar fallback is rejected. See the probe guide for the failed attempt 1 (`getByName`), the invalidated attempt 2 (leaked open document), and the resulting probe-hygiene rules. Do not change the real report source.
-
-### 3. Verify native story flow and page operations (done 2026-09-24)
-
-Independent probes passed for each capability. Paragraph separators are `\r` and `\n` is a soft line break; `paragraph.contents` carries the trailing `\r` except on the last paragraph. A text frame creates a story, and `nextTextFrame` links frames into one shared `parentStory` with `textContainers` in order. A deliberately small frame oversets (`overflows === true`) without losing text and clears after threading a second frame. Parent-page assignment, page add, and page duplicate work, `pageItem.override(page)` adopts a labeled parent frame onto a page, and parent items are found through document/master enumeration rather than the applied page's own collections. A structure save/reopen pair preserved pages, master, adopted frame, threaded story, and named styles with stable ids. Frame ownership follows geometric bounds, so the adapter must derive frame geometry from the target page.
-
-### 4. Verify image, object-style, and export behavior (done 2026-09-24)
-
-Object styles, graphic placement, fitting, inline anchoring, text wrap, dialog-free PDF/PNG export, and font-status detection all passed independent probes; details and numbers are in the probe guide. Two findings change later work: fitting scales the graphic rather than the frame, and missing fonts surface as `status === NOT_AVAILABLE` while `isValid` stays true. UXP file access is blocked in a Scripts Panel execution — `createFile` resolves but `write`/`read`/`delete` never settle — so the queued job/result transport requires the UXP panel manifest and the UXP Developer Tool. AppleScript `do script ... with arguments` values are not delivered to `.idjs`, so a CLI-to-host bridge must pass data through generated script content or the panel.
-
-### 5. Establish a synthetic publishing template (in progress)
-
-The generator `packages/indesign/probes/synthetic-template-probe.idjs` creates the disposable Cover/Article fixture under the ignored artifacts directory: A4 portrait, two pages, role-labeled frames and styles. Remaining work is to scan that template, commit the scan as an offline fixture, and compile it through the label-driven pipeline (`deriveRoleAssignments` -> `createTemplateInventory` -> `compileTemplate`) with a fixture test. The first end-to-end article set should include the basic article, long Chinese content, mixed Chinese/English, a long heading, quote blocks, an image with caption, a missing asset, and forced overset/reflow.
-
-### 6. Implement the real InDesign adapter and runner (started)
-
-Keep all direct InDesign DOM access in `packages/indesign`. The host-independent half is in place: `materializeMainStory` builds paragraph-separated story text with resolved paragraph/character style names, and `planHostOperations` emits a deterministic host plan (apply parent page, adopt parent frame, ensure threading, set story text, apply styles, place inline images). The UXP driver that executes that plan still has to be written against the confirmed contracts; it materializes `DocumentIR`, uses native text composition, reports host observations, adds Article pages after overset feedback, creates canonical document dumps, and exports without selection or dialogs.
-
-The queued job/result transport remains blocked: UXP file writes never settle from a Scripts Panel execution, so it needs the panel manifest and UXP Developer Tool. Until then, CLI host commands continue to return `HostUnavailable`, and a CLI-to-host bridge must pass data through generated script content (the plan payload) rather than arguments, because `do script ... with arguments` is not delivered to `.idjs`. CLI and panel must continue to call the same publishing core; neither may own publishing rules.
-
-### 7. Add host-backed golden and visual tests
-
-Create a separate host test lane; keep ordinary type checks, lint, unit tests, and UI tests independent of InDesign. The host lane should save:
-
-- the input job and host/UXP/DOM versions;
-- the generated editable `.indd`;
-- a deterministic `DocumentDump v1`;
-- export settings and PDF/image output;
-- failure traces and artifacts.
-
-Pin the InDesign version, template revision, fonts, and export settings for golden runs. Start reviewed visual baselines with the synthetic template. Establish a baseline for the Zijiang report only after the missing JPG, out-of-date links, and substituted font have been resolved. Keep Server compatibility as a later evaluation; do not require InDesign Server for the initial product.
-
-## Completion Gates
-
-The first meaningful product milestone is complete only when a structured article and synthetic designer-created template produce a normally editable `.indd`, the host reports composition and overset state, reflow adds pages without losing blocks, a canonical dump is deterministic, and an export can be compared in a host-backed test. A successful scan or isolated style probe alone does not satisfy this gate.
-
-At each milestone, run `pnpm validate`, inspect architecture boundaries, check `git diff --check`, review generated artifacts, update probe evidence, and commit the completed work using a concise Conventional Commit. Keep repository-authored documentation and commit messages in English.
+- Template-role mapping and annotation UI.
+- Real editorial template acceptance.
+- Signed and notarized external distribution.
+- InDesign Server and batch operation.

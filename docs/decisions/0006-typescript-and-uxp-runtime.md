@@ -2,23 +2,23 @@
 
 ## Status
 
-Accepted
+Superseded for the product UI by ADR 0007; shared TypeScript policy remains accepted
 
 ## Decision
 
-Use TypeScript 7.0 for project-reference builds and type checks. Compile TypeScript source to ESNext while limiting standard-library APIs to ES2020. Lower the UXP bundle to ES2020 until the minimum supported InDesign runtime is exercised in contract tests. Type the plugin against `@adobe/cc-ext-uxp-types` without including the browser `DOM` library.
+Use TypeScript 7.0 for project-reference builds and type checks. Compile TypeScript source to ESNext while limiting standard-library APIs to ES2020. The desktop WebView uses the browser DOM library. UXP `.idjs` host scripts are JavaScript files and remain separate from the TypeScript UI build.
 
 Keep the TypeScript 6 compatibility package under the `typescript` alias only while the current typescript-eslint parser requires the TypeScript compiler API. The `@typescript/native` alias provides the TypeScript 7 compiler executable.
 
 ## Rationale
 
-The core is bundled into both the CLI and the UXP panel. UXP runtime capabilities depend on the installed Adobe host. ESNext is the source output target for this new project; the ES2020 library baseline keeps newer built-in APIs out of shared code, and the ES2020 UXP bundle target preserves syntax compatibility until host tests justify raising it.
+The core is shared by the CLI and the desktop app. UXP runtime capabilities depend on the installed Adobe host. ESNext is the source output target; the ES2020 library baseline keeps newer built-in APIs out of shared code.
 
 ## Consequences
 
 - Shared publishing code must avoid JavaScript built-in APIs newer than ES2020 unless a tested polyfill is added.
-- The UXP bundle target must be revisited when a real panel load has been tested on the declared minimum InDesign version.
-- Browser-based UI previews and happy-dom tests verify panel behavior but do not establish UXP compatibility.
+- Host scripts still require execution tests on the declared InDesign version.
+- Desktop WebView builds do not establish host-script compatibility.
 - Revisit the TypeScript 6 compatibility alias when TypeScript 7's compiler API is supported by the lint ecosystem.
 
 ## References
