@@ -1,0 +1,622 @@
+const inDesign = require("indesign");
+const app = inDesign.app;
+const ROLE_KEY = "com.publisher.role";
+const PAGE_KEY = "com.publisher.documentPageId";
+const BLOCK_KEY = "com.publisher.blockId";
+
+function items(collection) {
+  const result = [];
+  for (let index = 0; index < collection.length; index += 1) {
+    result.push(typeof collection.item === "function" ? collection.item(index) : collection[index]);
+  }
+  return result;
+}
+
+function read(readValue, fallback) {
+  try {
+    const value = readValue();
+    return value === undefined || value === null ? fallback : value;
+  } catch (_error) {
+    return fallback;
+  }
+}
+
+function objectRef(prefix, object) {
+  const id = read(function () { return object.id; }, null);
+  return id === null ? null : prefix + String(id);
+}
+
+function roleLabel(object) {
+  const value = read(function () { return object.extractLabel(ROLE_KEY); }, "");
+  return value ? String(value) : undefined;
+}
+
+function label(object, key) {
+  const value = read(function () { return object.extractLabel(key); }, "");
+  return value ? String(value) : undefined;
+}
+
+function bounds(object) {
+  const value = read(function () { return object.geometricBounds; }, null);
+  if (!value || value.length !== 4) return undefined;
+  const result = [];
+  for (let index = 0; index < 4; index += 1) {
+    const coordinate = Number(value[index]);
+    if (!isFinite(coordinate)) return undefined;
+    result.push(coordinate);
+  }
+  return result;
+}
+
+function styleQualifiedName(style, document) {
+  const names = [String(read(function () { return style.name; }, ""))];
+  let parent = read(function () { return style.parent; }, null);
+  let depth = 0;
+  while (parent && depth < 8) {
+    const parentName = String(read(function () { return parent.name; }, ""));
+    const parentId = read(function () { return parent.id; }, null);
+    if (!parentName || parentId === document.id || parentName === document.name || parentName.indexOf("$ID/") === 0) break;
+    names.unshift(parentName);
+    parent = read(function () { return parent.parent; }, null);
+    depth += 1;
+  }
+  return names.join(" / ");
+}
+
+function scanTemplate(document) {
+  const pages = items(document.pages).map(function (page, index) {
+    const record = { ref: objectRef("page:", page), index: index, name: String(read(function () { return page.name; }, String(index + 1))) };
+    const pageLabel = read(function () { return page.label; }, "");
+    const pageRole = roleLabel(page);
+    const parent = read(function () { return page.appliedMaster; }, null);
+    const pageBounds = bounds(page);
+    if (pageLabel) record.label = String(pageLabel);
+    if (pageRole) record.roleLabel = pageRole;
+    if (parent) record.appliedParentPageRef = objectRef("parent:", parent);
+    if (pageBounds) record.bounds = pageBounds;
+    return record;
+  });
+  const parentPages = items(document.masterSpreads).map(function (spread, index) {
+    const record = { ref: objectRef("parent:", spread), index: index, name: String(read(function () { return spread.name; }, String(index + 1))) };
+    const spreadRole = roleLabel(spread);
+    if (spreadRole) record.roleLabel = spreadRole;
+    return record;
+  });
+  const pageRefs = {};
+  const parentRefs = {};
+  pages.forEach(function (page) { pageRefs[page.ref] = true; });
+  parentPages.forEach(function (page) { parentRefs[page.ref] = true; });
+  const textFrameIds = {};
+  items(document.textFrames).forEach(function (frame) { textFrameIds[String(frame.id)] = true; });
+  const frames = items(document.allPageItems).map(function (item, index) {
+    const isText = Boolean(textFrameIds[String(read(function () { return item.id; }, ""))]);
+    const graphics = read(function () { return item.allGraphics.length; }, 0);
+    const typeName = String(read(function () { return item.constructor.name; }, ""));
+    const kind = isText ? "text" : graphics > 0 || ["Rectangle", "Oval", "Polygon"].indexOf(typeName) >= 0 ? "graphic" : "other";
+    const record = { ref: objectRef("frame:", item), index: index, name: String(read(function () { return item.name; }, "")), kind: kind };
+    const itemLabel = read(function () { return item.label; }, "");
+    const itemRole = roleLabel(item);
+    const parentPage = read(function () { return item.parentPage; }, null);
+    const parent = read(function () { return item.parent; }, null);
+    const itemBounds = bounds(item);
+    const layer = read(function () { return item.itemLayer.name; }, "");
+    const story = isText ? read(function () { return item.parentStory; }, null) : null;
+    const previous = isText ? read(function () { return item.previousTextFrame; }, null) : null;
+    const next = isText ? read(function () { return item.nextTextFrame; }, null) : null;
+    if (itemLabel) record.label = String(itemLabel);
+    if (itemRole) record.roleLabel = itemRole;
+    if (parentPage && pageRefs[objectRef("page:", parentPage)]) record.pageRef = objectRef("page:", parentPage);
+    if (parent && parentRefs[objectRef("parent:", parent)]) record.parentPageRef = objectRef("parent:", parent);
+    if (layer) record.layerName = String(layer);
+    if (itemBounds) record.bounds = itemBounds;
+    if (story) {
+      record.storyRef = objectRef("story:", story);
+      record.textLength = read(function () { return story.characters.length; }, 0);
+      record.overset = Boolean(read(function () { return story.overflows; }, false));
+    }
+    if (previous) record.previousFrameRef = objectRef("frame:", previous);
+    if (next) record.nextFrameRef = objectRef("frame:", next);
+    const wrap = read(function () { return item.textWrapPreferences.textWrapMode; }, undefined);
+    if (wrap !== undefined) record.wrapMode = String(wrap);
+    return record;
+  }).filter(function (frame) { return frame.ref !== null; });
+  const frameRefsByStory = {};
+  frames.forEach(function (frame) {
+    if (frame.storyRef) frameRefsByStory[frame.storyRef] = (frameRefsByStory[frame.storyRef] || []).concat([frame.ref]);
+  });
+  const stories = items(document.stories).map(function (story, index) {
+    const ref = objectRef("story:", story);
+    return {
+      ref: ref,
+      index: index,
+      textLength: read(function () { return story.characters.length; }, 0),
+      overset: Boolean(read(function () { return story.overflows; }, false)),
+      frameRefs: frameRefsByStory[ref] || []
+    };
+  }).filter(function (story) { return story.ref !== null; });
+  const styles = [];
+  function appendStyles(collection, kind) {
+    items(collection).forEach(function (style, index) {
+      const record = {
+        ref: objectRef("style:", style),
+        index: index,
+        kind: kind,
+        name: String(read(function () { return style.name; }, "")),
+        qualifiedName: styleQualifiedName(style, document)
+      };
+      const semanticRole = roleLabel(style);
+      if (semanticRole) record.roleLabel = semanticRole;
+      styles.push(record);
+    });
+  }
+  appendStyles(document.allParagraphStyles, "paragraph");
+  appendStyles(document.allCharacterStyles, "character");
+  appendStyles(document.allObjectStyles, "object");
+  const assets = items(document.links).map(function (link) {
+    return {
+      ref: objectRef("asset:", link),
+      name: String(read(function () { return link.name; }, "Unknown")),
+      format: String(read(function () { return link.linkType; }, "unknown")),
+      status: String(read(function () { return link.status; }, "UNKNOWN"))
+    };
+  }).filter(function (asset) { return asset.ref !== null; });
+  const fonts = items(document.fonts).map(function (font) {
+    return {
+      name: String(read(function () { return font.name; }, "Unknown")),
+      family: String(read(function () { return font.fontFamily; }, "Unknown")),
+      style: String(read(function () { return font.fontStyleName; }, "Unknown")),
+      status: String(read(function () { return font.status; }, "UNKNOWN"))
+    };
+  });
+  return {
+    schemaVersion: 1,
+    host: { application: "InDesign", version: String(app.version), domVersion: String(app.scriptPreferences.version) },
+    document: {
+      name: String(document.name),
+      modified: Boolean(document.modified),
+      horizontalMeasurementUnits: String(read(function () { return document.viewPreferences.horizontalMeasurementUnits; }, "UNKNOWN")),
+      verticalMeasurementUnits: String(read(function () { return document.viewPreferences.verticalMeasurementUnits; }, "UNKNOWN")),
+      pageCount: document.pages.length,
+      spreadCount: document.spreads.length,
+      parentPageCount: document.masterSpreads.length,
+      storyCount: document.stories.length
+    },
+    pages: pages,
+    parentPages: parentPages,
+    frames: frames,
+    stories: stories,
+    styles: styles,
+    assets: assets,
+    fonts: fonts
+  };
+}
+
+function idFromRef(ref) {
+  const separator = ref.indexOf(":");
+  if (separator < 0) throw new Error("Invalid InDesign object reference: " + ref);
+  const value = Number(ref.slice(separator + 1));
+  if (!isFinite(value)) throw new Error("Invalid InDesign object ID in reference: " + ref);
+  return value;
+}
+
+function findById(collection, id) {
+  const list = items(collection);
+  for (let index = 0; index < list.length; index += 1) {
+    if (Number(read(function () { return list[index].id; }, -1)) === Number(id)) return list[index];
+  }
+  return null;
+}
+
+function pageForSource(document, sourceRef) {
+  const id = idFromRef(sourceRef);
+  if (sourceRef.indexOf("page:") === 0) {
+    const page = findById(document.pages, id);
+    if (!page) throw new Error("Template page no longer exists: " + sourceRef);
+    return page;
+  }
+  if (sourceRef.indexOf("parent:") === 0) {
+    const page = items(document.pages).find(function (candidate) {
+      const parent = read(function () { return candidate.appliedMaster; }, null);
+      return parent && Number(parent.id) === id;
+    });
+    if (!page) throw new Error("No document page applies template parent page " + sourceRef);
+    return page;
+  }
+  throw new Error("Unsupported template page reference: " + sourceRef);
+}
+
+function frameForPage(document, frameRef, page, requiredRole) {
+  const pageFrames = items(page.pageItems);
+  for (let index = 0; index < pageFrames.length; index += 1) {
+    if (requiredRole && roleLabel(pageFrames[index]) === requiredRole) return pageFrames[index];
+    if (Number(read(function () { return pageFrames[index].id; }, -1)) === idFromRef(frameRef)) return pageFrames[index];
+  }
+  const masterFrame = findById(document.allPageItems, idFromRef(frameRef));
+  if (!masterFrame) throw new Error("Template frame no longer exists: " + frameRef);
+  const overridden = read(function () { return masterFrame.override(page); }, null);
+  if (overridden) return overridden;
+  const roleMatches = items(page.textFrames).filter(function (frame) { return requiredRole && roleLabel(frame) === requiredRole; });
+  if (roleMatches.length === 1) return roleMatches[0];
+  throw new Error("Could not copy the labeled frame onto page " + String(page.name));
+}
+
+function styleByQualifiedName(document, kind, qualifiedName) {
+  const collection = kind === "paragraph" ? document.allParagraphStyles
+    : kind === "character" ? document.allCharacterStyles : document.allObjectStyles;
+  const styles = items(collection);
+  for (let index = 0; index < styles.length; index += 1) {
+    if (styleQualifiedName(styles[index], document) === qualifiedName || String(styles[index].name) === qualifiedName) return styles[index];
+  }
+  throw new Error("Template style is missing: " + qualifiedName);
+}
+
+function applyParagraphStyle(paragraph, style) {
+  paragraph.applyParagraphStyle(style, true);
+}
+
+function pageBySemanticId(document, id) {
+  return items(document.pages).find(function (page) { return label(page, PAGE_KEY) === id; }) || null;
+}
+
+function addArticlePage(document, prototype, flowFrameRef, endingPage) {
+  let page;
+  if (endingPage) {
+    page = document.pages.add(inDesign.LocationOptions.BEFORE, endingPage);
+  } else {
+    page = document.pages.add();
+  }
+  page.insertLabel(ROLE_KEY, "Article");
+  const parent = read(function () { return prototype.appliedMaster; }, null);
+  if (parent) page.appliedMaster = parent;
+  const flowSource = findById(document.allPageItems, idFromRef(flowFrameRef));
+  if (!flowSource) throw new Error("Article flow frame no longer exists: " + flowFrameRef);
+  const parentPage = read(function () { return flowSource.parentPage; }, null);
+  const masterPageIds = [];
+  items(document.masterSpreads).forEach(function (spread) {
+    items(spread.pages).forEach(function (masterPage) { masterPageIds.push(Number(masterPage.id)); });
+  });
+  const isParentFrame = parentPage && masterPageIds.indexOf(Number(parentPage.id)) >= 0;
+  if (isParentFrame) {
+    const adopted = read(function () { return flowSource.override(page); }, null);
+    if (!adopted) throw new Error("Could not adopt the article flow frame onto a new page.");
+    return { page: page, frame: adopted };
+  }
+  if (!parentPage) throw new Error("The article flow frame is not attached to a page.");
+  const sourceBounds = bounds(flowSource);
+  const baseBounds = bounds(prototype);
+  const targetBounds = bounds(page);
+  if (!sourceBounds || !baseBounds || !targetBounds) throw new Error("Could not read article frame geometry for a new page.");
+  const translated = [
+    targetBounds[0] + sourceBounds[0] - baseBounds[0],
+    targetBounds[1] + sourceBounds[1] - baseBounds[1],
+    targetBounds[0] + sourceBounds[2] - baseBounds[0],
+    targetBounds[1] + sourceBounds[3] - baseBounds[1]
+  ];
+  const copy = page.textFrames.add({ geometricBounds: translated });
+  copy.insertLabel(ROLE_KEY, "article-flow");
+  return { page: page, frame: copy };
+}
+
+function setCoverText(document, template, coverPage, documentData) {
+  const titleRef = template.frameRoles["hero-title"];
+  if (!titleRef) throw new Error("Labeled template frame role is required: hero-title");
+  const titleFrame = frameForPage(document, titleRef, coverPage, "hero-title");
+  titleFrame.contents = documentData.metadata.title;
+  const titleStyle = template.styleRoles.ArticleTitle;
+  if (titleStyle) applyParagraphStyle(titleFrame.parentStory.paragraphs.item(0), styleByQualifiedName(document, "paragraph", titleStyle));
+
+  if (documentData.metadata.subtitle) {
+    const subtitleRef = template.frameRoles["hero-subtitle"];
+    if (!subtitleRef) throw new Error("The template needs a frame labeled hero-subtitle for this article.");
+    const subtitleFrame = frameForPage(document, subtitleRef, coverPage, "hero-subtitle");
+    subtitleFrame.contents = documentData.metadata.subtitle;
+    if (template.styleRoles.Subtitle) applyParagraphStyle(subtitleFrame.parentStory.paragraphs.item(0), styleByQualifiedName(document, "paragraph", template.styleRoles.Subtitle));
+  }
+}
+
+function setCoverImage(document, template, coverPage, documentData) {
+  const imageBlock = documentData.blocks.find(function (block) { return block.type === "image"; });
+  const imageRef = template.frameRoles["hero-image"];
+  if (!imageBlock || !imageRef) return null;
+  const frame = frameForPage(document, imageRef, coverPage, "hero-image");
+  if (template.styleRoles.HeroImage) frame.applyObjectStyle(styleByQualifiedName(document, "object", template.styleRoles.HeroImage), true);
+  let placed;
+  try {
+    placed = items(frame.place(imageBlock.src));
+  } catch (_error) {
+    return imageBlock.src;
+  }
+  if (!placed.length) {
+    return imageBlock.src;
+  }
+  if (inDesign.FitOptions) frame.fit(inDesign.FitOptions.PROPORTIONALLY);
+  frame.insertLabel("com.publisher.alt", imageBlock.alt || "");
+  return null;
+}
+
+function materialize(document, payload, allowImages) {
+  const template = payload.template;
+  const ir = payload.ir;
+  const documentData = payload.document;
+  const operations = payload.operations;
+  const pages = [];
+  const articlePageIds = ir.pages.filter(function (page) { return page.role === "Article"; }).map(function (page) { return page.id; });
+  const firstArticle = ir.pages.find(function (page) { return page.role === "Article"; });
+  if (!firstArticle) throw new Error("The publishing plan has no Article page.");
+  const articlePrototype = pageForSource(document, firstArticle.sourcePageRef);
+
+  const missingAssets = [];
+  if (payload.mode === "create") {
+    const selectedPageIds = {};
+    ir.pages.forEach(function (page) {
+      if (page.role === "Article" && page.id !== firstArticle.id) return;
+      const source = pageForSource(document, page.sourcePageRef);
+      pages.push({ plan: page, page: source });
+      selectedPageIds[String(source.id)] = true;
+    });
+    const originalPages = items(document.pages);
+    for (let index = originalPages.length - 1; index >= 0; index -= 1) {
+      if (!selectedPageIds[String(originalPages[index].id)]) originalPages[index].remove();
+    }
+    pages.forEach(function (entry) { entry.page.insertLabel(PAGE_KEY, entry.plan.id); });
+  } else {
+    ir.pages.forEach(function (plannedPage) {
+      const existing = pageBySemanticId(document, plannedPage.id);
+      if (existing) pages.push({ plan: plannedPage, page: existing });
+    });
+    const expectedExisting = pages.length;
+    if (expectedExisting === 0) throw new Error("Generated document pages are missing; refusing to continue.");
+    for (let index = 0; index < ir.pages.length; index += 1) {
+      const plannedPage = ir.pages[index];
+      if (pageBySemanticId(document, plannedPage.id)) continue;
+      if (plannedPage.role !== "Article") throw new Error("Cannot add an unrecognized page role during reflow: " + plannedPage.role);
+      const endingPage = ir.pages.some(function (page) { return page.role === "Ending"; })
+        ? pageBySemanticId(document, "page-ending")
+        : null;
+      const added = addArticlePage(document, articlePrototype, template.pageRoles.Article.flowFrameRef, endingPage);
+      added.page.insertLabel(PAGE_KEY, plannedPage.id);
+      pages.push({ plan: plannedPage, page: added.page });
+    }
+    pages.sort(function (left, right) { return ir.pages.findIndex(function (page) { return page.id === left.plan.id; }) - ir.pages.findIndex(function (page) { return page.id === right.plan.id; }); });
+  }
+
+  const coverEntry = pages.find(function (entry) { return entry.plan.role === "Cover"; });
+  if (!coverEntry) throw new Error("The publishing plan has no Cover page.");
+  if (payload.mode === "create") {
+    setCoverText(document, template, coverEntry.page, documentData);
+    const missingCoverImage = setCoverImage(document, template, coverEntry.page, documentData);
+    if (missingCoverImage) missingAssets.push(missingCoverImage);
+  }
+
+  const articleFrames = [];
+  for (let index = 0; index < articlePageIds.length; index += 1) {
+    const pageEntry = pages.find(function (entry) { return entry.plan.id === articlePageIds[index]; });
+    if (!pageEntry) throw new Error("Article page is missing from the generated document: " + articlePageIds[index]);
+    const flowRef = template.pageRoles.Article.flowFrameRef;
+    if (!flowRef) throw new Error("Template has no labeled article flow frame.");
+    articleFrames.push(frameForPage(document, flowRef, pageEntry.page, "article-flow"));
+  }
+  for (let index = 0; index < articleFrames.length - 1; index += 1) articleFrames[index].nextTextFrame = articleFrames[index + 1];
+
+  if (payload.mode === "create") {
+    if (articleFrames.length === 0) throw new Error("No article flow frame was created.");
+    const story = articleFrames[0].parentStory;
+    const textOperation = operations.find(function (operation) { return operation.op === "set-story-text"; });
+    if (!textOperation) throw new Error("Host plan has no main story text operation.");
+    articleFrames[0].contents = textOperation.text;
+    if (String(story.contents) !== textOperation.text) throw new Error("InDesign did not preserve the complete article text.");
+
+    const storyPlan = payload.story;
+    if (storyPlan && Array.isArray(storyPlan.paragraphs)) {
+      storyPlan.paragraphs.forEach(function (plannedParagraph, index) {
+        if (story.paragraphs.length > index) story.paragraphs.item(index).insertLabel(BLOCK_KEY, plannedParagraph.blockId);
+      });
+    }
+    operations.filter(function (operation) { return operation.op === "apply-paragraph-style"; }).forEach(function (operation) {
+      const paragraph = story.paragraphs.item(operation.paragraphIndex);
+      applyParagraphStyle(paragraph, styleByQualifiedName(document, "paragraph", operation.styleName));
+      paragraph.insertLabel(BLOCK_KEY, operation.blockId);
+    });
+    operations.filter(function (operation) { return operation.op === "apply-character-style"; }).forEach(function (operation) {
+      const paragraph = story.paragraphs.item(operation.paragraphIndex);
+      const style = styleByQualifiedName(document, "character", operation.styleName);
+      for (let index = operation.start; index < operation.end; index += 1) paragraph.characters.item(index).applyCharacterStyle(style);
+    });
+    if (allowImages) {
+      operations.filter(function (operation) { return operation.op === "place-inline-image"; }).forEach(function (operation) {
+        const anchorPoint = story.paragraphs.item(operation.paragraphIndex).insertionPoints.item(0);
+        let placed;
+        try {
+          placed = items(anchorPoint.place(operation.source));
+        } catch (_error) {
+          missingAssets.push(operation.source);
+          return;
+        }
+        if (!placed.length) {
+          missingAssets.push(operation.source);
+          return;
+        }
+        const candidates = [placed[0], read(function () { return placed[0].parent; }, null)].filter(Boolean);
+        const styleFrame = candidates.find(function (candidate) { return typeof candidate.applyObjectStyle === "function"; });
+        if (operation.objectStyleName) {
+          if (!styleFrame) throw new Error("InDesign placed an inline image without an object-style-capable frame.");
+          styleFrame.applyObjectStyle(styleByQualifiedName(document, "object", operation.objectStyleName), true);
+        }
+        const fitFrame = candidates.find(function (candidate) { return typeof candidate.fit === "function"; });
+        if (fitFrame && inDesign.FitOptions) fitFrame.fit(inDesign.FitOptions.PROPORTIONALLY);
+      });
+    }
+  }
+
+  if (typeof document.recompose === "function") document.recompose();
+  const mainStory = articleFrames[0].parentStory;
+  const textOperation = operations.find(function (operation) { return operation.op === "set-story-text"; });
+  if (payload.mode === "appendPages" && textOperation && String(mainStory.contents).indexOf(textOperation.text.slice(0, 32)) < 0) {
+    throw new Error("The saved article text could not be found after reopening the generated document.");
+  }
+  const storyPlan = payload.story;
+  for (let index = 0; storyPlan && index < storyPlan.paragraphs.length; index += 1) {
+    const paragraph = mainStory.paragraphs.item(index);
+    const expected = storyPlan.paragraphs[index].text;
+    const hasImage = operations.some(function (operation) { return operation.op === "place-inline-image" && operation.paragraphIndex === index; });
+    if (hasImage) continue;
+    if (expected && String(paragraph.contents).replace(/\r$/, "") !== expected) {
+      throw new Error("InDesign changed article text in paragraph " + String(index + 1) + ".");
+    }
+  }
+  return { articleFrames: articleFrames, story: mainStory, missingAssets: missingAssets };
+}
+
+function observation(document, story, template, renderMissingAssets) {
+  const articlePages = items(document.pages).filter(function (page) {
+    const id = label(page, PAGE_KEY);
+    return id && id.indexOf("page-article-") === 0;
+  });
+  const overset = [];
+  if (Boolean(read(function () { return story.overflows; }, false))) {
+    const lastPage = articlePages[articlePages.length - 1];
+    overset.push({
+      storyId: "main",
+      pageId: lastPage ? label(lastPage, PAGE_KEY) : "page-article-001",
+      frameRef: template.pageRoles.Article.flowFrameRef
+    });
+  }
+  const missingAssets = renderMissingAssets.slice();
+  items(document.links).forEach(function (link) {
+    const status = String(read(function () { return link.status; }, "UNKNOWN"));
+    if (status !== "NORMAL" && status !== "LINK_OUT_OF_DATE") {
+      missingAssets.push(String(read(function () { return link.filePath || link.name; }, "Unknown linked asset")));
+    }
+  });
+  const missingFonts = items(document.fonts).filter(function (font) {
+    return String(read(function () { return font.status; }, "UNKNOWN")) !== "INSTALLED";
+  }).map(function (font) { return String(read(function () { return font.name; }, "Unknown font")); });
+  return { pageCount: document.pages.length, overset: overset, missingAssets: missingAssets, missingFonts: missingFonts };
+}
+
+function documentDump(document) {
+  return {
+    schemaVersion: 1,
+    pages: items(document.pages).map(function (page, index) {
+      const role = roleLabel(page);
+      const record = { id: String(read(function () { return page.id; }, index)), index: index };
+      if (role) record.role = role;
+      const parent = read(function () { return page.appliedMaster.name; }, "");
+      if (parent) record.parentPage = String(parent);
+      return record;
+    }),
+    stories: items(document.stories).map(function (story) {
+      return {
+        id: String(read(function () { return story.id; }, "unknown")),
+        overset: Boolean(read(function () { return story.overflows; }, false)),
+        paragraphs: items(story.paragraphs).map(function (paragraph) {
+          const blockId = label(paragraph, BLOCK_KEY);
+          const style = String(read(function () { return paragraph.appliedParagraphStyle.name; }, ""));
+          const result = { text: String(read(function () { return paragraph.contents; }, "")).replace(/\r$/, "") };
+          if (blockId) result.semanticId = blockId;
+          if (style) result.style = style;
+          return result;
+        })
+      };
+    }),
+    frames: items(document.allPageItems).filter(function (frame) { return Boolean(roleLabel(frame)); }).map(function (frame) {
+      const boundsValue = bounds(frame);
+      const parentPage = read(function () { return frame.parentPage; }, null);
+      const pageIndex = parentPage ? items(document.pages).findIndex(function (page) { return Number(page.id) === Number(parentPage.id); }) : -1;
+      const result = { semanticRole: roleLabel(frame) };
+      if (pageIndex >= 0) result.pageIndex = pageIndex;
+      if (boundsValue) result.bounds = boundsValue;
+      const frameText = String(read(function () { return frame.contents; }, ""));
+      if (frameText) result.text = frameText;
+      const previous = read(function () { return frame.previousTextFrame; }, null);
+      const next = read(function () { return frame.nextTextFrame; }, null);
+      if (previous) result.previousFrame = String(previous.id);
+      if (next) result.nextFrame = String(next.id);
+      return result;
+    }),
+    missingAssets: items(document.links).filter(function (link) {
+      return String(read(function () { return link.status; }, "UNKNOWN")) !== "NORMAL";
+    }).map(function (link) { return String(read(function () { return link.filePath || link.name; }, "Unknown linked asset")); }),
+    missingFonts: items(document.fonts).filter(function (font) {
+      return String(read(function () { return font.status; }, "UNKNOWN")) !== "INSTALLED";
+    }).map(function (font) { return String(read(function () { return font.name; }, "Unknown font")); })
+  };
+}
+
+async function withDocument(path, readOnly, action) {
+  const document = await Promise.resolve(app.open(path, true));
+  try {
+    return await action(document);
+  } finally {
+    await Promise.resolve(document.close(inDesign.SaveOptions.NO));
+  }
+}
+
+async function execute(job) {
+  const payload = job.payload;
+  if (job.action === "inspectTemplate") {
+    const scan = await withDocument(payload.templatePath, true, scanTemplate);
+    return { scan: scan };
+  }
+  if (job.action === "render") {
+    const path = job.payload.mode === "create" ? payload.templatePath : payload.outputPath;
+    const document = await Promise.resolve(app.open(path, true));
+    try {
+      if (payload.mode === "create") await Promise.resolve(document.save(payload.outputPath));
+      const materialized = materialize(document, payload, true);
+      await Promise.resolve(document.save());
+      return { observation: observation(document, materialized.story, payload.template, materialized.missingAssets) };
+    } finally {
+      await Promise.resolve(document.close(inDesign.SaveOptions.NO));
+    }
+  }
+  if (job.action === "dump") {
+    return { documentDump: await withDocument(payload.documentPath, true, documentDump) };
+  }
+  if (job.action === "export") {
+    await withDocument(payload.documentPath, false, async function (document) {
+      if (payload.format === "pdf") {
+        app.pdfExportPreferences.pageRange = "1-" + String(document.pages.length);
+        await Promise.resolve(document.exportFile(inDesign.ExportFormat.PDF_TYPE, payload.outputPath, false));
+      } else if (payload.format === "png") {
+        app.pngExportPreferences.pageString = String(payload.pageNumber);
+        app.pngExportPreferences.exportResolution = 96;
+        await Promise.resolve(document.exportFile(inDesign.ExportFormat.PNG_FORMAT, payload.outputPath, false));
+      } else {
+        throw new Error("Unsupported export format: " + String(payload.format));
+      }
+    });
+    return { outputPath: payload.outputPath };
+  }
+  throw new Error("Unsupported InDesign operation: " + String(job.action));
+}
+
+async function fileEntry(path) {
+  const encoded = path.split("/").map(function (part) { return encodeURIComponent(part); }).join("/");
+  return await require("uxp").storage.localFileSystem.getEntryWithUrl("file:" + encoded);
+}
+
+async function runHostJob(jobPath, resultPath, donePath, expectedJobId) {
+  const fileSystem = require("uxp").storage.localFileSystem;
+  const jobFile = await fileSystem.getEntryWithUrl("file:" + jobPath.split("/").map(function (part) { return encodeURIComponent(part); }).join("/"));
+  let job;
+  let result;
+  try {
+    job = JSON.parse(await jobFile.read());
+    if (job.schemaVersion !== 1 || job.jobId !== expectedJobId) throw new Error("HostJob schema or ID does not match this script.");
+    result = { schemaVersion: 1, jobId: expectedJobId, status: "succeeded", diagnostics: [], payload: await execute(job) };
+  } catch (error) {
+    result = {
+      schemaVersion: 1,
+      jobId: expectedJobId,
+      status: "failed",
+      diagnostics: [{ code: "HostJob.ExecutionFailed", severity: "error", message: String(error && error.stack ? error.stack : error) }]
+    };
+  }
+  const resultFile = await fileSystem.createEntryWithUrl("file:" + resultPath.split("/").map(function (part) { return encodeURIComponent(part); }).join("/"), { overwrite: true });
+  await resultFile.write(JSON.stringify(result));
+  const doneFile = await fileSystem.createEntryWithUrl("file:" + donePath.split("/").map(function (part) { return encodeURIComponent(part); }).join("/"), { overwrite: true });
+  await doneFile.write(expectedJobId);
+}
+
+globalThis.PublisherHostRunner = { runHostJob: runHostJob };

@@ -7,6 +7,6 @@
     { "path": "./packages/indesign" },
     { "path": "./packages/test-support" },
     { "path": "./packages/cli" },
-    { "path": "./packages/plugin" }
+    { "path": "./packages/desktop/tsconfig.json" }
   ]
 }

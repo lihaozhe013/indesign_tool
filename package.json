@@ -11,15 +11,14 @@
     "lint": "eslint .",
     "test": "pnpm build && vitest run",
     "typecheck": "tsc -b",
-    "ui:dev": "pnpm --filter @publisher/plugin build && pnpm --filter @publisher/plugin dev",
-    "validate": "pnpm typecheck && pnpm lint && pnpm test"
+    "desktop:dev": "pnpm --filter @publisher/desktop tauri dev",
+    "desktop:build": "pnpm --filter @publisher/desktop tauri build",
+    "validate": "pnpm typecheck && pnpm lint && pnpm test && pnpm --filter @publisher/desktop rust:test"
   },
   "devDependencies": {
-    "@adobe/cc-ext-uxp-types": "7.3.1",
     "@types/mdast": "^4.0.4",
     "@types/node": "^26.6.2",
     "@typescript/native": "npm:typescript@7.0.2",
-    "esbuild": "^0.28.2",
     "eslint": "^10.11.0",
     "fast-check": "^4.10.2",
     "happy-dom": "20.14.5",

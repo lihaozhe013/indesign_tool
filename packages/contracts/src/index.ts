@@ -322,6 +322,7 @@ export interface DocumentDump {
     bounds?: [number, number, number, number];
     previousFrame?: string;
     nextFrame?: string;
+    text?: string;
   }>;
   missingAssets: string[];
   missingFonts: string[];

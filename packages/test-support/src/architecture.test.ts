@@ -27,11 +27,11 @@ describe("package architecture", () => {
   });
 
   it("keeps runtime APIs within the declared library while compiling TypeScript to ESNext", async () => {
-    const packageSources = await Promise.all(["contracts", "core", "template", "plugin"]
+    const packageSources = await Promise.all(["contracts", "core", "template", "desktop"]
       .map((name) => collect(resolve(root, "packages", name, "src"))));
     const files = packageSources.flat();
     const sources = await Promise.all(files.map((file) => readFile(file, "utf8")));
-    const bundle = await readFile(resolve(root, "packages/plugin/dist/index.js"), "utf8");
+    const bundle = await readFile(resolve(root, "packages/desktop/src/App.tsx"), "utf8");
     const tsconfig = JSON.parse(await readFile(resolve(root, "tsconfig.base.json"), "utf8")) as {
       compilerOptions: { target?: string; lib?: string[] };
     };

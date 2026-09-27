@@ -11,13 +11,20 @@ const TEMPLATE_PATH = "/Users/lihaozhe/dev/indesign_tool/artifacts/host/indesign
 
 const PARAGRAPH_STYLES = [
   { name: "Article / H1", role: "ArticleTitle" },
+  { name: "Article / Subtitle", role: "Subtitle" },
   { name: "Article / H2", role: "SectionHeading" },
   { name: "Article / Body", role: "Body" },
   { name: "Article / Quote", role: "Quote" },
   { name: "Article / Caption", role: "Caption" }
 ];
-const CHARACTER_STYLES = [{ name: "Article / Emphasis", role: "Emphasis" }];
-const OBJECT_STYLES = [{ name: "Article / ImageFrame", role: "HeroImage" }];
+const CHARACTER_STYLES = [
+  { name: "Article / Emphasis", role: "Emphasis" },
+  { name: "Article / Link", role: "Link" }
+];
+const OBJECT_STYLES = [
+  { name: "Article / ImageFrame", role: "HeroImage" },
+  { name: "Article / InlineImage", role: "InlineImage" }
+];
 
 function read(readValue, fallback) {
   try {
@@ -50,9 +57,8 @@ const result = {
   success: false
 };
 
-(async function main() {
-  let scratchDocument;
-  try {
+let scratchDocument;
+try {
     scratchDocument = await settled(app.documents.add());
     scratchDocument.documentPreferences.pageWidth = 210;
     scratchDocument.documentPreferences.pageHeight = 297;
@@ -108,6 +114,10 @@ const result = {
       geometricBounds: [coverBounds[0] + 90, coverBounds[1] + 20, coverBounds[0] + 160, coverBounds[3] - 20]
     });
     heroTitle.insertLabel(ROLE_KEY, "hero-title");
+    const heroSubtitle = coverHost.textFrames.add({
+      geometricBounds: [coverBounds[0] + 165, coverBounds[1] + 20, coverBounds[0] + 182, coverBounds[3] - 20]
+    });
+    heroSubtitle.insertLabel(ROLE_KEY, "hero-subtitle");
     const heroImage = coverHost.rectangles.add({
       geometricBounds: [coverBounds[0] + 20, coverBounds[1] + 20, coverBounds[0] + 80, coverBounds[3] - 20]
     });
@@ -173,8 +183,8 @@ const result = {
     await settled(scratchDocument.save(TEMPLATE_PATH));
     result.savedName = String(read(function () { return scratchDocument.name; }, ""));
 
-    const requiredRoles = ["article-flow", "page-number", "hero-title", "hero-image", "Cover", "Article",
-      "ArticleTitle", "SectionHeading", "Body", "Quote", "Caption", "Emphasis", "HeroImage"];
+    const requiredRoles = ["article-flow", "page-number", "hero-title", "hero-subtitle", "hero-image", "Cover", "Article",
+      "ArticleTitle", "Subtitle", "SectionHeading", "Body", "Quote", "Caption", "Emphasis", "Link", "HeroImage", "InlineImage"];
     const foundRoles = roleLabels.map(function (entry) { return entry.role; });
     result.missingRoles = requiredRoles.filter(function (role) { return foundRoles.indexOf(role) < 0; });
     result.checks = {
@@ -206,4 +216,3 @@ const result = {
         || result.openDocumentCountImmediate === result.openDocumentCountBefore + 1);
     console.log("PUBLISHER_SYNTHETIC_TEMPLATE_PROBE_V4 " + JSON.stringify(result));
   }
-})();
