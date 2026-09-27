@@ -1,0 +1,139 @@
+{
+  "app": {
+    "title": "Folio",
+    "nav": {
+      "workspace": "工作区",
+      "publish": "发布文章",
+      "currentArticle": "当前文章"
+    },
+    "action": {
+      "openMarkdown": "打开 Markdown",
+      "saveDraft": "保存草稿",
+      "dismiss": "关闭",
+      "change": "更换",
+      "browse": "浏览"
+    },
+    "article": {
+      "untitled": "未命名文章",
+      "unsavedDraft": "未保存的草稿",
+      "unsavedChanges": "有未保存的更改"
+    },
+    "heading": {
+      "eyebrow": "发布流程",
+      "title": "把你的故事变成版面。",
+      "subtitle": "用 Markdown 写作，交给 InDesign 完成排版。"
+    },
+    "editor": {
+      "title": "文章源文件",
+      "hint": "编写或打开一个 Markdown 文件",
+      "format": "MARKDOWN",
+      "sourceLabel": "Markdown 源文",
+      "lineCount_other": "{{count}} 行",
+      "blockCount_other": "{{count}} 个内容块",
+      "blocked": "请先修复解析错误",
+      "stateChanged": "有未保存的更改",
+      "stateSaved": "已保存",
+      "stateNew": "新建草稿",
+      "ariaLabel": "Markdown 文章"
+    },
+    "template": {
+      "title": "InDesign 模板",
+      "hint": "选择带角色标签的 .indd 文件",
+      "select": "选择模板",
+      "untouched": "原始文件不会被改动",
+      "pageCount_other": "{{count}} 页",
+      "styleCount_other": "已扫描 {{count}} 个样式",
+      "ready": "{{name}} 已可发布",
+      "needsAttention": "请查看下方的模板问题"
+    },
+    "output": {
+      "title": "输出位置",
+      "hint": "选择新的可编辑文档路径",
+      "choose": "选择输出文件",
+      "included": "同时包含 PDF 与页面预览图"
+    },
+    "publish": {
+      "ready": "随时可以开始",
+      "hint": "InDesign 会基于你的模板创建可编辑副本。",
+      "action": "发布文章",
+      "working": "处理中…",
+      "creates": "生成全新的 INDD、PDF 与页面预览图"
+    },
+    "host": {
+      "checking": "正在检查 InDesign…",
+      "ready": "就绪",
+      "connected": "InDesign {{version}}",
+      "unavailable": "InDesign 不可用",
+      "refresh": "刷新连接"
+    },
+    "preflight": {
+      "overline": "预检",
+      "title": "检查与问题",
+      "errorCount_other": "{{count}} 个错误",
+      "warningCount_other": "{{count}} 个警告",
+      "emptyTitle": "暂时没有发现问题",
+      "emptyHint": "Markdown 与模板的检查结果会显示在这里。"
+    },
+    "preview": {
+      "overline": "输出预览",
+      "titleIdle": "页面预览",
+      "titleReady": "已生成页面",
+      "openIndd": "打开 INDD ↗",
+      "openPdf": "打开 PDF ↗",
+      "alt": "第 {{page}} 页预览",
+      "emptyTitle": "生成的页面会显示在这里",
+      "emptyHint": "发布后即可查看 InDesign 的排版结果。",
+      "previous": "上一页",
+      "next": "下一页",
+      "position": "第 {{current}} 页 / 共 {{total}} 页",
+      "metaComposition": "InDesign 排版",
+      "metaLive": "实时导出"
+    },
+    "progress": {
+      "working": "正在与 InDesign 通信…",
+      "inspectTemplate": "正在检查模板标签…",
+      "saveAndCheck": "正在保存文章并检查图片文件…",
+      "buildDocument": "正在生成可编辑的 InDesign 文档…",
+      "compose": "正在编排文字并放置图片…",
+      "reflow": "正在增加页面并重新排版…（{{count}}）",
+      "checkStructure": "正在检查已保存的文档结构…",
+      "verify": "正在校验可编辑文档…",
+      "exportPdf": "正在导出 PDF…",
+      "previews": "正在生成页面预览…（{{page}}/{{total}}）",
+      "finalize": "正在整理交付文件…"
+    },
+    "notice": {
+      "opened": "已打开 {{file}}。",
+      "saved": "已保存 {{file}}。",
+      "templateReady": "模板已就绪：{{name}}。",
+      "templateIssues": "模板扫描完成，但存在一些问题。",
+      "templateUnusable": "模板需要带标签的封面页与文章页、一个文章流文本框，以及必需的段落样式。",
+      "published_other": "已发布 {{file}}，共 {{count}} 页。",
+      "fixMarkdown": "请先修复 Markdown 中的问题再发布。",
+      "chooseTemplate": "请先选择并检查一个带标签的 InDesign 模板。",
+      "hostUnavailable": "InDesign 不可用。",
+      "fixImages": "请先解决列出的图片问题再发布。",
+      "layoutIncomplete": "InDesign 未能完成排版，暂存文件已丢弃。",
+      "verificationFailed": "文档校验失败，暂存文件已丢弃。"
+    },
+    "error": {
+      "noTemplateScan": "InDesign 未返回模板扫描结果。",
+      "noLayoutPlan": "无法生成 InDesign 排版方案。",
+      "noObservation": "InDesign 未返回排版观测结果。",
+      "noDocumentDump": "InDesign 未返回文档结构。",
+      "noExportPath": "InDesign 未确认导出路径。",
+      "noSavedArticle": "发布需要先保存 Markdown 文章。",
+      "noPages": "InDesign 生成的文档没有任何页面。",
+      "publishFailed": "InDesign 操作失败：{{action}}。"
+    },
+    "locale": {
+      "label": "语言",
+      "en": "English",
+      "zh-Hans": "简体中文"
+    },
+    "footer": {
+      "note": "Folio 始终由 InDesign 负责字体排印与页面构成。",
+      "local": "本地工作区"
+    }
+  }
+}

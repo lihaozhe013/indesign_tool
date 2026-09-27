@@ -1,5 +1,5 @@
 :root {
-  font-family: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", sans-serif;
   color: #1c292b;
   background: #f4f6f2;
   font-synthesis: none;
@@ -60,6 +60,10 @@ button:disabled { cursor: not-allowed; opacity: .56; }
 .host-indicator.online .status-dot { background: #b4db71; box-shadow: 0 0 0 3px rgba(180,219,113,.15); }
 .host-indicator.offline .status-dot { background: #e29473; }
 .sidebar-host-refresh { padding: 7px 0 0 !important; color: #93aaa1 !important; }
+.locale-switch { display: flex; gap: 4px; margin-top: 10px; }
+.locale-switch button { flex: 1; border: 1px solid rgba(210,229,222,.16); background: transparent; color: #93a6a2; border-radius: 5px; padding: 4px 6px; font: 9px "DM Sans", sans-serif; }
+.locale-switch button:hover { color: #d7e5df; border-color: rgba(210,229,222,.34); }
+.locale-switch button.active { background: #2a3e3f; color: #f4f8ef; border-color: rgba(182,218,118,.5); }
 .sidebar-version { color: #758a85; font: 9px "DM Mono", monospace; padding-top: 20px; }
 
 .main-area { flex: 1; min-width: 0; display: flex; flex-direction: column; }
@@ -189,6 +193,62 @@ h1 { font: 700 27px/1.22 "Manrope", sans-serif; letter-spacing: -.9px; color: #2
 .content-footer { display: flex; justify-content: space-between; color: #9aa5a1; font-size: 8px; padding: 16px 2px 0; }
 .content-footer > span:last-child { display: flex; gap: 7px; align-items: center; font: 7px "DM Mono", monospace; letter-spacing: .8px; }
 .content-footer i { width: 5px; height: 5px; display: inline-block; border-radius: 50%; background: #a6cd6a; }
+
+/* CJK locale: the Latin display faces have no Han glyphs, so Han text resolves through the
+   generic sans-serif in each stack. Latin letter-spacing tuned for Manrope and DM Mono reads
+   as cramped or gappy against dense Han glyphs, so reset it and loosen leading slightly. */
+:lang(zh-Hans) .brand-name,
+:lang(zh-Hans) .brand-caption,
+:lang(zh-Hans) .sidebar-section-label,
+:lang(zh-Hans) .eyebrow,
+:lang(zh-Hans) .section-overline,
+:lang(zh-Hans) .results-heading .section-overline,
+:lang(zh-Hans) h1,
+:lang(zh-Hans) .heading-badge,
+:lang(zh-Hans) .editor-toolbar,
+:lang(zh-Hans) .content-footer > span:last-child { letter-spacing: normal; }
+
+:lang(zh-Hans) .panel-heading p,
+:lang(zh-Hans) .panel-heading h2,
+:lang(zh-Hans) .results-heading h2,
+:lang(zh-Hans) .page-subtitle,
+:lang(zh-Hans) .breadcrumb,
+:lang(zh-Hans) .notice,
+:lang(zh-Hans) .side-link,
+:lang(zh-Hans) .button,
+:lang(zh-Hans) .text-button,
+:lang(zh-Hans) .editor-footer,
+:lang(zh-Hans) .file-state,
+:lang(zh-Hans) .selection-copy strong,
+:lang(zh-Hans) .selection-action,
+:lang(zh-Hans) .template-result,
+:lang(zh-Hans) .publish-card-top strong,
+:lang(zh-Hans) .publish-card-top small,
+:lang(zh-Hans) .publish-button,
+:lang(zh-Hans) .publish-hint,
+:lang(zh-Hans) .progress-line,
+:lang(zh-Hans) .empty-checks strong,
+:lang(zh-Hans) .empty-checks span,
+:lang(zh-Hans) .diagnostic-row strong,
+:lang(zh-Hans) .preview-placeholder-copy strong,
+:lang(zh-Hans) .preview-placeholder-copy span,
+:lang(zh-Hans) .preview-controls,
+:lang(zh-Hans) .content-footer,
+:lang(zh-Hans) .open-pdf-button,
+:lang(zh-Hans) .issue-count,
+:lang(zh-Hans) .article-card-title,
+:lang(zh-Hans) .locale-switch button { line-height: 1.6; }
+
+:lang(zh-Hans) .panel-heading p,
+:lang(zh-Hans) .empty-checks span,
+:lang(zh-Hans) .preview-placeholder-copy span { line-height: 1.55; }
+
+:lang(zh-Hans) .editor-toolbar,
+:lang(zh-Hans) .sidebar-section-label,
+:lang(zh-Hans) .eyebrow,
+:lang(zh-Hans) .section-overline,
+:lang(zh-Hans) .heading-badge,
+:lang(zh-Hans) .content-footer > span:last-child { font-family: "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", sans-serif; }
 
 @media (max-width: 1100px) {
   .sidebar { flex-basis: 205px; }

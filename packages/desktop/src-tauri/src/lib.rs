@@ -474,6 +474,7 @@ fn require_nonempty_file(path: &Path, label: &str) -> Result<(), String> {
 
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_store::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             open_markdown,
             save_markdown,

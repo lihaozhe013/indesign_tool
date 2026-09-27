@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import type {
   CompiledTemplate,
   Diagnostic,
@@ -12,6 +14,8 @@ import type {
 import { createIndesignAdapter, planHostOperations } from "@publisher/indesign";
 import { parseArticle, publishDocument } from "@publisher/core";
 import { compileTemplate, createTemplateInventory, deriveRoleAssignments } from "@publisher/template";
+import { applyDocumentLocale, supportedLocales, type Locale } from "./i18n/index.js";
+import { saveLocale } from "./i18n/preference.js";
 import { verifyDocumentDump } from "./publication-verification.js";
 import {
   checkAssets,
@@ -60,16 +64,23 @@ type TemplateState = {
 
 type Notice = { kind: "success" | "error" | "info"; text: string };
 
+// Progress is stored as a key plus interpolation values rather than a rendered string so a
+// language switch repaints the in-flight status instead of leaving it frozen in the old locale.
+type Progress = { key: string; params?: Record<string, unknown> } | null;
+
 export function App() {
+  const { t, i18n } = useTranslation();
   const [markdown, setMarkdown] = useState(starterArticle);
   const [articlePath, setArticlePath] = useState<string | null>(null);
   const [savedMarkdown, setSavedMarkdown] = useState<string | null>(null);
   const [templatePath, setTemplatePath] = useState<string | null>(null);
   const [template, setTemplate] = useState<TemplateState | null>(null);
   const [outputPath, setOutputPath] = useState<string | null>(null);
-  const [host, setHost] = useState<HostAvailability>({ available: false, message: "Checking InDesign…" });
+  // `null` means the first availability probe has not returned yet, which is distinct from a
+  // probe that reported InDesign as unavailable.
+  const [host, setHost] = useState<HostAvailability | null>(null);
   const [busy, setBusy] = useState(false);
-  const [progress, setProgress] = useState("");
+  const [progress, setProgress] = useState<Progress>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [diagnostics, setDiagnostics] = useState<Diagnostic[]>([]);
   const [output, setOutput] = useState<OutputPaths | null>(null);
@@ -77,14 +88,26 @@ export function App() {
   const [previewIndex, setPreviewIndex] = useState(1);
   const [outputPageCount, setOutputPageCount] = useState(0);
 
+  const locale = (i18n.resolvedLanguage ?? i18n.language) as Locale;
+
   const parsed = useMemo(() => parseArticle(markdown, { sourceId: articlePath ?? "desktop-draft" }), [markdown, articlePath]);
   const dirty = savedMarkdown !== null ? markdown !== savedMarkdown : Boolean(articlePath);
-  const title = parsed.document?.metadata.title ?? "Untitled article";
+  const title = parsed.document?.metadata.title ?? t("app.article.untitled");
   const missingSubtitleFrame = Boolean(parsed.document?.metadata.subtitle && template && !template.compiled.frameRoles["hero-subtitle"]);
   const templateReady = Boolean(template && !missingSubtitleFrame && !template.diagnostics.some((item) => item.severity === "error"));
 
+  useEffect(() => {
+    document.title = t("app.title");
+  }, [t, locale]);
+
+  const changeLocale = useCallback((next: Locale) => {
+    void i18n.changeLanguage(next);
+    applyDocumentLocale(next);
+    void saveLocale(next);
+  }, [i18n]);
+
   const refreshHost = useCallback(async () => {
-    setHost({ available: false, message: "Checking InDesign…" });
+    setHost(null);
     try {
       setHost(await checkHost());
     } catch (error) {
@@ -97,6 +120,8 @@ export function App() {
   }, [refreshHost]);
 
   useEffect(() => {
+    // Diagnostic text stays English: it originates in the contract-owned core and template
+    // packages and is persisted in host job results, so it is not part of the UI catalog.
     const subtitleDiagnostics: Diagnostic[] = missingSubtitleFrame ? [{
       code: "Template.CoverSubtitleFrameMissing",
       message: "Add a text frame labeled with role hero-subtitle to the Cover page, or remove the article subtitle.",
@@ -114,11 +139,11 @@ export function App() {
       setMarkdown(opened.content);
       setSavedMarkdown(opened.content);
       setDiagnostics([]);
-      setNotice({ kind: "info", text: `Opened ${fileName(opened.path)}.` });
+      setNotice({ kind: "info", text: t("app.notice.opened", { file: fileName(opened.path) }) });
     } catch (error) {
       setNotice({ kind: "error", text: errorMessage(error) });
     }
-  }, []);
+  }, [t]);
 
   const handleSaveMarkdown = useCallback(async (): Promise<string | null> => {
     try {
@@ -126,24 +151,24 @@ export function App() {
       if (!path) return null;
       setArticlePath(path);
       setSavedMarkdown(markdown);
-      setNotice({ kind: "success", text: `Saved ${fileName(path)}.` });
+      setNotice({ kind: "success", text: t("app.notice.saved", { file: fileName(path) }) });
       return path;
     } catch (error) {
       setNotice({ kind: "error", text: errorMessage(error) });
       return null;
     }
-  }, [articlePath, markdown]);
+  }, [articlePath, markdown, t]);
 
   const inspectTemplate = useCallback(async (path: string) => {
     setBusy(true);
-    setProgress("Inspecting labeled template…");
+    setProgress({ key: "app.progress.inspectTemplate" });
     setTemplatePath(path);
     setTemplate(null);
     setDiagnostics([]);
     try {
-      const result = await invokeHost("inspectTemplate", { templatePath: path });
+      const result = await invokeHost("inspectTemplate", { templatePath: path }, t);
       const scan = result.scan as TemplateScan | undefined;
-      if (!scan) throw new Error("InDesign did not return a template scan.");
+      if (!scan) throw new Error(t("app.error.noTemplateScan"));
       const name = fileStem(path);
       const assignments = deriveRoleAssignments(scan, { templateId: templateId(path), name });
       const inventoryResult = assignments.assignments
@@ -161,15 +186,15 @@ export function App() {
       }
       if (!inventoryResult.inventory || !compilation.template) {
         setDiagnostics(deduplicateDiagnostics(resultDiagnostics));
-        setNotice({ kind: "error", text: "The template needs labeled Cover and Article roles, an article flow frame, and the required paragraph styles." });
+        setNotice({ kind: "error", text: t("app.notice.templateUnusable") });
         return;
       }
       setTemplate({ scan, inventory: inventoryResult.inventory, compiled: compilation.template, diagnostics: deduplicateDiagnostics(resultDiagnostics) });
       setDiagnostics(deduplicateDiagnostics(resultDiagnostics));
       if (resultDiagnostics.some((item) => item.severity === "error")) {
-        setNotice({ kind: "error", text: "The template scan completed with issues." });
+        setNotice({ kind: "error", text: t("app.notice.templateIssues") });
       } else {
-        setNotice({ kind: "success", text: `Template ready: ${inventoryResult.inventory.name}.` });
+        setNotice({ kind: "success", text: t("app.notice.templateReady", { name: inventoryResult.inventory.name }) });
       }
     } catch (error) {
       const message = errorMessage(error);
@@ -177,9 +202,9 @@ export function App() {
       setNotice({ kind: "error", text: message });
     } finally {
       setBusy(false);
-      setProgress("");
+      setProgress(null);
     }
-  }, []);
+  }, [t]);
 
   const handleChooseTemplate = useCallback(async () => {
     try {
@@ -209,15 +234,15 @@ export function App() {
     setOutput(null);
     setPreview(null);
     if (!parsed.document || initialDiagnostics.some((item) => item.severity === "error")) {
-      setNotice({ kind: "error", text: "Fix the Markdown issues before publishing." });
+      setNotice({ kind: "error", text: t("app.notice.fixMarkdown") });
       return;
     }
     if (!template || !templateReady || !templatePath) {
-      setNotice({ kind: "error", text: "Choose and inspect a labeled InDesign template first." });
+      setNotice({ kind: "error", text: t("app.notice.chooseTemplate") });
       return;
     }
-    if (!host.available) {
-      setNotice({ kind: "error", text: host.message ?? "InDesign is unavailable." });
+    if (!host?.available) {
+      setNotice({ kind: "error", text: host?.message ?? t("app.notice.hostUnavailable") });
       return;
     }
 
@@ -225,9 +250,9 @@ export function App() {
     let stage: OutputStage | null = null;
     let finalOutputPath = outputPath;
     try {
-      setProgress("Saving article and checking image files…");
+      setProgress({ key: "app.progress.saveAndCheck" });
       const savedPath = await saveMarkdown(articlePath, markdown);
-      if (!savedPath) throw new Error("Publishing needs a saved Markdown article.");
+      if (!savedPath) throw new Error(t("app.error.noSavedArticle"));
       setArticlePath(savedPath);
       setSavedMarkdown(markdown);
 
@@ -237,7 +262,7 @@ export function App() {
       const readyDiagnostics = deduplicateDiagnostics([...initialDiagnostics, ...assetResult.diagnostics]);
       setDiagnostics(readyDiagnostics);
       if (readyDiagnostics.some((item) => item.severity === "error")) {
-        setNotice({ kind: "error", text: "Resolve the listed image issues before publishing." });
+        setNotice({ kind: "error", text: t("app.notice.fixImages") });
         return;
       }
 
@@ -247,17 +272,19 @@ export function App() {
         setOutputPath(finalOutputPath);
       }
       stage = await prepareOutputStage(finalOutputPath);
-      setProgress("Building the editable InDesign document…");
+      setProgress({ key: "app.progress.buildDocument" });
 
       let renderCount = 0;
       const adapter = createIndesignAdapter({
         inspectTemplate: async () => template.inventory,
         render: async (input) => {
           renderCount += 1;
-          setProgress(renderCount === 1 ? "Composing text and placing images…" : `Adding pages and recomposing… (${renderCount})`);
+          setProgress(renderCount === 1
+            ? { key: "app.progress.compose" }
+            : { key: "app.progress.reflow", params: { count: renderCount } });
           const hostPlan = planHostOperations(input.document, input.template, input.ir);
           if (!hostPlan.plan || hostPlan.diagnostics.some((item) => item.severity === "error")) {
-            throw new Error(hostPlan.diagnostics.map((item) => item.message).join("\n") || "Could not create the InDesign layout plan.");
+            throw new Error(hostPlan.diagnostics.map((item) => item.message).join("\n") || t("app.error.noLayoutPlan"));
           }
           const result = await invokeHost("render", {
             templatePath: input.templatePath,
@@ -268,8 +295,8 @@ export function App() {
             mode: input.mode,
             operations: hostPlan.plan.operations,
             story: hostPlan.plan.story
-          });
-          if (!result.observation) throw new Error("InDesign did not return layout observations.");
+          }, t);
+          if (!result.observation) throw new Error(t("app.error.noObservation"));
           return result.observation as {
             pageCount: number;
             overset: Array<{ storyId: string; pageId: string; frameRef: string; remainingCharacters?: number }>;
@@ -278,14 +305,14 @@ export function App() {
           };
         },
         dump: async (documentPath) => {
-          setProgress("Checking the saved document structure…");
-          const result = await invokeHost("dump", { documentPath });
-          if (!result.documentDump) throw new Error("InDesign did not return a document structure.");
+          setProgress({ key: "app.progress.checkStructure" });
+          const result = await invokeHost("dump", { documentPath }, t);
+          if (!result.documentDump) throw new Error(t("app.error.noDocumentDump"));
           return result.documentDump as DocumentDump;
         },
         export: async (documentPath, destination, format) => {
-          const result = await invokeHost("export", { documentPath, outputPath: destination, format, pageNumber: 1 });
-          if (!result.outputPath) throw new Error("InDesign did not confirm the export path.");
+          const result = await invokeHost("export", { documentPath, outputPath: destination, format, pageNumber: 1 }, t);
+          if (!result.outputPath) throw new Error(t("app.error.noExportPath"));
         }
       });
 
@@ -298,30 +325,30 @@ export function App() {
       const publishDiagnostics = published.diagnostics;
       if (!published.complete || !published.ir) {
         setDiagnostics(deduplicateDiagnostics([...readyDiagnostics, ...publishDiagnostics]));
-        setNotice({ kind: "error", text: "InDesign could not finish layout. The staged files were discarded." });
+        setNotice({ kind: "error", text: t("app.notice.layoutIncomplete") });
         return;
       }
 
-      setProgress("Verifying the editable document…");
+      setProgress({ key: "app.progress.verify" });
       const dump = await adapter.dump(stage.documentPath);
       const verification = verifyDocumentDump(dump, resolvedDocument);
       if (verification.some((item) => item.severity === "error")) {
         setDiagnostics(deduplicateDiagnostics([...readyDiagnostics, ...publishDiagnostics, ...verification]));
-        setNotice({ kind: "error", text: "Document verification failed. The staged files were discarded." });
+        setNotice({ kind: "error", text: t("app.notice.verificationFailed") });
         return;
       }
       const pageCount = dump.pages.length;
-      if (!pageCount) throw new Error("InDesign created a document with no pages.");
+      if (!pageCount) throw new Error(t("app.error.noPages"));
 
-      setProgress("Exporting PDF…");
-      await invokeHost("export", { documentPath: stage.documentPath, outputPath: stage.pdfPath, format: "pdf" });
+      setProgress({ key: "app.progress.exportPdf" });
+      await invokeHost("export", { documentPath: stage.documentPath, outputPath: stage.pdfPath, format: "pdf" }, t);
       for (let page = 1; page <= pageCount; page += 1) {
-        setProgress(`Creating page previews… (${page}/${pageCount})`);
+        setProgress({ key: "app.progress.previews", params: { page, total: pageCount } });
         const previewPath = joinPath(stage.previewDirectory, `page-${String(page).padStart(3, "0")}.png`);
-        await invokeHost("export", { documentPath: stage.documentPath, outputPath: previewPath, format: "png", pageNumber: page });
+        await invokeHost("export", { documentPath: stage.documentPath, outputPath: previewPath, format: "png", pageNumber: page }, t);
       }
 
-      setProgress("Finalizing deliverables…");
+      setProgress({ key: "app.progress.finalize" });
       const finalFiles = await finalizeOutputStage(finalOutputPath, stage.stageId, pageCount);
       stage = null;
       setOutput(finalFiles);
@@ -329,7 +356,7 @@ export function App() {
       setPreviewIndex(1);
       setPreview(await readPreview(joinPath(finalFiles.previewDirectory, "page-001.png")));
       setDiagnostics(deduplicateDiagnostics([...readyDiagnostics, ...publishDiagnostics, ...verification]));
-      setNotice({ kind: "success", text: `Published ${fileName(finalFiles.documentPath)} with ${pageCount} pages.` });
+      setNotice({ kind: "success", text: t("app.notice.published", { file: fileName(finalFiles.documentPath), count: pageCount }) });
     } catch (error) {
       setNotice({ kind: "error", text: errorMessage(error) });
       setDiagnostics((current) => deduplicateDiagnostics([...current, { code: "Publish.Failed", message: errorMessage(error), severity: "error" }]));
@@ -346,9 +373,9 @@ export function App() {
         }
       }
       setBusy(false);
-      setProgress("");
+      setProgress(null);
     }
-  }, [articlePath, host, markdown, outputPath, parsed, template, templatePath, templateReady]);
+  }, [articlePath, host, markdown, outputPath, parsed, template, templatePath, templateReady, t]);
 
   const showPreview = useCallback(async (index: number) => {
     if (!output || index < 1 || index > outputPageCount) return;
@@ -359,6 +386,10 @@ export function App() {
       setNotice({ kind: "error", text: errorMessage(error) });
     }
   }, [output, outputPageCount]);
+
+  const errorCount = diagnostics.filter((item) => item.severity === "error").length;
+  const warningCount = diagnostics.filter((item) => item.severity === "warning").length;
+  const progressText = progress ? t(progress.key, progress.params ?? {}) : "";
 
   return (
     <div className="app-shell">
@@ -371,119 +402,141 @@ export function App() {
           </div>
         </div>
 
-        <div className="sidebar-section-label">WORKSPACE</div>
-        <button className="side-link active" type="button"><span className="side-icon">▤</span> Publish article</button>
+        <div className="sidebar-section-label">{t("app.nav.workspace")}</div>
+        <button className="side-link active" type="button"><span className="side-icon">▤</span> {t("app.nav.publish")}</button>
         <div className="sidebar-divider" />
-        <div className="sidebar-section-label">CURRENT ARTICLE</div>
+        <div className="sidebar-section-label">{t("app.nav.currentArticle")}</div>
         <div className="article-card">
           <div className="article-card-icon">MD</div>
           <div className="article-card-copy">
             <div className="article-card-title">{title}</div>
-            <div className="article-card-meta">{articlePath ? fileName(articlePath) : "Unsaved draft"}</div>
+            <div className="article-card-meta">{articlePath ? fileName(articlePath) : t("app.article.unsavedDraft")}</div>
           </div>
-          {dirty && <span className="dirty-dot" title="Unsaved changes" />}
+          {dirty && <span className="dirty-dot" title={t("app.article.unsavedChanges")} />}
         </div>
         <div className="sidebar-footer">
-          <div className={`host-indicator ${host.available ? "online" : "offline"}`}>
+          <div className={`host-indicator ${host?.available ? "online" : "offline"}`}>
             <span className="status-dot" />
-            <span>{host.available ? `InDesign ${host.version ?? "ready"}` : "InDesign unavailable"}</span>
+            <span>{host === null
+              ? t("app.host.checking")
+              : host.available
+                ? t("app.host.connected", { version: host.version ?? t("app.host.ready") })
+                : t("app.host.unavailable")}</span>
           </div>
-          <button className="text-button sidebar-host-refresh" type="button" onClick={() => void refreshHost()}>Refresh connection</button>
+          <button className="text-button sidebar-host-refresh" type="button" onClick={() => void refreshHost()}>{t("app.host.refresh")}</button>
+          <div className="locale-switch" role="group" aria-label={t("app.locale.label")}>
+            {supportedLocales.map((option) => (
+              <button
+                key={option}
+                type="button"
+                className={locale === option ? "active" : ""}
+                aria-pressed={locale === option}
+                onClick={() => changeLocale(option)}
+              >
+                {t(`app.locale.${option}`)}
+              </button>
+            ))}
+          </div>
           <div className="sidebar-version">Folio Desktop · 0.1.0</div>
         </div>
       </aside>
 
       <main className="main-area">
         <header className="topbar">
-          <div className="breadcrumb"><span>Workspace</span><span className="crumb-separator">/</span><strong>Publish article</strong></div>
+          <div className="breadcrumb"><span>{t("app.nav.workspace")}</span><span className="crumb-separator">/</span><strong>{t("app.nav.publish")}</strong></div>
           <div className="topbar-actions">
-            <button className="button quiet" type="button" onClick={() => void handleOpenMarkdown()} disabled={busy}>Open Markdown</button>
-            <button className="button quiet" type="button" onClick={() => void handleSaveMarkdown()} disabled={busy}>Save draft</button>
+            <button className="button quiet" type="button" onClick={() => void handleOpenMarkdown()} disabled={busy}>{t("app.action.openMarkdown")}</button>
+            <button className="button quiet" type="button" onClick={() => void handleSaveMarkdown()} disabled={busy}>{t("app.action.saveDraft")}</button>
           </div>
         </header>
 
         <div className="content-scroll">
           <div className="page-heading">
             <div>
-              <div className="eyebrow">PUBLISHING WORKFLOW <span className="eyebrow-line" /></div>
-              <h1>Turn your story into pages.</h1>
-              <p className="page-subtitle">Write in Markdown. Let InDesign handle the composition.</p>
+              <div className="eyebrow">{t("app.heading.eyebrow")} <span className="eyebrow-line" /></div>
+              <h1>{t("app.heading.title")}</h1>
+              <p className="page-subtitle">{t("app.heading.subtitle")}</p>
             </div>
             <div className="heading-badge"><span className="badge-spark">✳</span> INDD · PDF · PNG</div>
           </div>
 
-          {notice && <div className={`notice ${notice.kind}`} role="status"><span className="notice-icon">{notice.kind === "success" ? "✓" : notice.kind === "error" ? "!" : "i"}</span><span>{notice.text}</span><button type="button" aria-label="Dismiss" onClick={() => setNotice(null)}>×</button></div>}
+          {notice && <div className={`notice ${notice.kind}`} role="status"><span className="notice-icon">{notice.kind === "success" ? "✓" : notice.kind === "error" ? "!" : "i"}</span><span>{notice.text}</span><button type="button" aria-label={t("app.action.dismiss")} onClick={() => setNotice(null)}>×</button></div>}
 
           <div className="workflow-grid">
             <section className="editor-panel panel">
               <div className="panel-heading editor-heading">
-                <div className="panel-title-group"><span className="step-number">01</span><div><h2>Article source</h2><p>Write or open a Markdown file</p></div></div>
-                <div className={`file-state ${dirty ? "changed" : "saved"}`}><span className="file-state-dot" />{dirty ? "Unsaved changes" : articlePath ? "Saved" : "New draft"}</div>
+                <div className="panel-title-group"><span className="step-number">01</span><div><h2>{t("app.editor.title")}</h2><p>{t("app.editor.hint")}</p></div></div>
+                <div className={`file-state ${dirty ? "changed" : "saved"}`}><span className="file-state-dot" />{dirty ? t("app.editor.stateChanged") : articlePath ? t("app.editor.stateSaved") : t("app.editor.stateNew")}</div>
               </div>
-              <div className="editor-toolbar"><span className="markdown-chip">M↓</span><span>MARKDOWN</span><span className="toolbar-divider" /><span className="editor-file-name">{articlePath ? fileName(articlePath) : "untitled-article.md"}</span><span className="editor-toolbar-spacer" /><span className="line-count">{markdown.split("\n").length} lines</span></div>
+              <div className="editor-toolbar"><span className="markdown-chip">M↓</span><span>{t("app.editor.format")}</span><span className="toolbar-divider" /><span className="editor-file-name">{articlePath ? fileName(articlePath) : "untitled-article.md"}</span><span className="editor-toolbar-spacer" /><span className="line-count">{t("app.editor.lineCount", { count: markdown.split("\n").length })}</span></div>
               <textarea
                 className="markdown-editor"
-                aria-label="Markdown article"
+                aria-label={t("app.editor.ariaLabel")}
                 value={markdown}
                 spellCheck={false}
                 onChange={(event) => setMarkdown(event.target.value)}
                 disabled={busy}
               />
-              <div className="editor-footer"><span><span className="footer-dot" /> Markdown source</span><span>{parsed.document ? `${parsed.document.blocks.length} content blocks` : "Fix parse errors to continue"}</span></div>
+              <div className="editor-footer"><span><span className="footer-dot" /> {t("app.editor.sourceLabel")}</span><span>{parsed.document ? t("app.editor.blockCount", { count: parsed.document.blocks.length }) : t("app.editor.blocked")}</span></div>
             </section>
 
             <div className="workflow-side">
               <section className="setup-card panel">
                 <div className="panel-heading">
-                  <div className="panel-title-group"><span className="step-number">02</span><div><h2>InDesign template</h2><p>Choose a role-labeled .indd file</p></div></div>
+                  <div className="panel-title-group"><span className="step-number">02</span><div><h2>{t("app.template.title")}</h2><p>{t("app.template.hint")}</p></div></div>
                   <span className={`step-check ${templateReady ? "complete" : ""}`}>{templateReady ? "✓" : "2"}</span>
                 </div>
                 <button className={`selection-row ${template ? "selected" : ""}`} type="button" onClick={() => void handleChooseTemplate()} disabled={busy}>
                   <span className="file-icon indesign">Id</span>
-                  <span className="selection-copy"><strong>{template ? fileName(templatePath ?? "") : "Select a template"}</strong><small>{template ? `${template.scan.document.pageCount} pages · ${template.scan.styles.length} styles scanned` : "Your original file stays untouched"}</small></span>
-                  <span className="selection-action">{template ? "Change" : "Browse"}</span>
+                  <span className="selection-copy">
+                    <strong>{template ? fileName(templatePath ?? "") : t("app.template.select")}</strong>
+                    <small>{template
+                      ? `${t("app.template.pageCount", { count: template.scan.document.pageCount })} · ${t("app.template.styleCount", { count: template.scan.styles.length })}`
+                      : t("app.template.untouched")}</small>
+                  </span>
+                  <span className="selection-action">{template ? t("app.action.change") : t("app.action.browse")}</span>
                 </button>
-                {template && <div className={`template-result ${templateReady ? "ready" : "needs-attention"}`}><span className="result-icon">{templateReady ? "✓" : "!"}</span><span>{templateReady ? `${template.compiled.name} is ready to publish` : "Review template issues below"}</span></div>}
+                {template && <div className={`template-result ${templateReady ? "ready" : "needs-attention"}`}><span className="result-icon">{templateReady ? "✓" : "!"}</span><span>{templateReady ? t("app.template.ready", { name: template.compiled.name }) : t("app.template.needsAttention")}</span></div>}
               </section>
 
               <section className="setup-card panel output-card">
                 <div className="panel-heading">
-                  <div className="panel-title-group"><span className="step-number">03</span><div><h2>Output location</h2><p>Choose a new editable document path</p></div></div>
+                  <div className="panel-title-group"><span className="step-number">03</span><div><h2>{t("app.output.title")}</h2><p>{t("app.output.hint")}</p></div></div>
                   <span className={`step-check ${outputPath ? "complete" : ""}`}>{outputPath ? "✓" : "3"}</span>
                 </div>
                 <button className={`selection-row ${outputPath ? "selected" : ""}`} type="button" onClick={() => void handleChooseOutput()} disabled={busy}>
                   <span className="file-icon folder">↗</span>
-                  <span className="selection-copy"><strong>{outputPath ? fileName(outputPath) : "Choose output file"}</strong><small>{outputPath ? parentPath(outputPath) : "A PDF and page previews are included"}</small></span>
-                  <span className="selection-action">{outputPath ? "Change" : "Browse"}</span>
+                  <span className="selection-copy"><strong>{outputPath ? fileName(outputPath) : t("app.output.choose")}</strong><small>{outputPath ? parentPath(outputPath) : t("app.output.included")}</small></span>
+                  <span className="selection-action">{outputPath ? t("app.action.change") : t("app.action.browse")}</span>
                 </button>
               </section>
 
               <section className="publish-card">
-                <div className="publish-card-top"><div className="publish-orb"><span>✳</span></div><div><strong>Ready when you are</strong><small>InDesign will create an editable copy of your template.</small></div></div>
-                <button className="publish-button" type="button" onClick={() => void handlePublish()} disabled={busy || !parsed.document || !templateReady || !host.available}>
-                  <span>{busy ? "Working…" : "Publish article"}</span><span className="publish-arrow">{busy ? "···" : "↗"}</span>
+                <div className="publish-card-top"><div className="publish-orb"><span>✳</span></div><div><strong>{t("app.publish.ready")}</strong><small>{t("app.publish.hint")}</small></div></div>
+                <button className="publish-button" type="button" onClick={() => void handlePublish()} disabled={busy || !parsed.document || !templateReady || !host?.available}>
+                  <span>{busy ? t("app.publish.working") : t("app.publish.action")}</span><span className="publish-arrow">{busy ? "···" : "↗"}</span>
                 </button>
-                {busy ? <div className="progress-line"><span className="progress-spinner" />{progress || "Working with InDesign…"}</div> : <div className="publish-hint">Creates a fresh INDD, PDF, and page previews</div>}
+                {busy ? <div className="progress-line"><span className="progress-spinner" />{progressText || t("app.progress.working")}</div> : <div className="publish-hint">{t("app.publish.creates")}</div>}
               </section>
             </div>
           </div>
 
           <section className="results-grid">
             <div className="diagnostics-panel panel">
-              <div className="results-heading"><div><span className="section-overline">PREFLIGHT</span><h2>Checks &amp; issues</h2></div><span className={`issue-count ${diagnostics.some((item) => item.severity === "error") ? "has-errors" : ""}`}>{diagnostics.filter((item) => item.severity === "error").length} errors · {diagnostics.filter((item) => item.severity === "warning").length} warnings</span></div>
-              {diagnostics.length ? <div className="diagnostic-list">{diagnostics.map((item, index) => <DiagnosticRow key={`${item.code}-${item.path ?? index}`} diagnostic={item} />)}</div> : <div className="empty-checks"><span className="checks-mark">✓</span><div><strong>No issues found yet</strong><span>Markdown and template checks will appear here.</span></div></div>}
+              <div className="results-heading"><div><span className="section-overline">{t("app.preflight.overline")}</span><h2>{t("app.preflight.title")}</h2></div><span className={`issue-count ${errorCount > 0 ? "has-errors" : ""}`}>{t("app.preflight.errorCount", { count: errorCount })} · {t("app.preflight.warningCount", { count: warningCount })}</span></div>
+              {diagnostics.length ? <div className="diagnostic-list">{diagnostics.map((item, index) => <DiagnosticRow key={`${item.code}-${item.path ?? index}`} diagnostic={item} />)}</div> : <div className="empty-checks"><span className="checks-mark">✓</span><div><strong>{t("app.preflight.emptyTitle")}</strong><span>{t("app.preflight.emptyHint")}</span></div></div>}
             </div>
 
             <div className="preview-panel panel">
-              <div className="results-heading preview-heading"><div><span className="section-overline">OUTPUT PREVIEW</span><h2>{output ? "Generated pages" : "Page preview"}</h2></div>{output && <button className="text-button" type="button" onClick={() => void openOutput(output.documentPath)}>Open INDD ↗</button>}</div>
+              <div className="results-heading preview-heading"><div><span className="section-overline">{t("app.preview.overline")}</span><h2>{output ? t("app.preview.titleReady") : t("app.preview.titleIdle")}</h2></div>{output && <button className="text-button" type="button" onClick={() => void openOutput(output.documentPath)}>{t("app.preview.openIndd")}</button>}</div>
               <div className={`preview-stage ${preview ? "has-preview" : ""}`}>
-                {preview ? <img src={preview} alt={`Preview of page ${previewIndex}`} /> : <div className="preview-placeholder"><div className="paper-preview"><span /><span /><span /><i /></div><div className="preview-placeholder-copy"><strong>Your pages will appear here</strong><span>Publish to see the InDesign composition.</span></div></div>}
+                {preview ? <img src={preview} alt={t("app.preview.alt", { page: previewIndex })} /> : <div className="preview-placeholder"><div className="paper-preview"><span /><span /><span /><i /></div><div className="preview-placeholder-copy"><strong>{t("app.preview.emptyTitle")}</strong><span>{t("app.preview.emptyHint")}</span></div></div>}
               </div>
-              {output ? <div className="preview-controls"><button type="button" aria-label="Previous page" onClick={() => void showPreview(Math.max(1, previewIndex - 1))} disabled={previewIndex <= 1}>‹</button><span>Page <strong>{previewIndex}</strong> of {outputPageCount}</span><button type="button" aria-label="Next page" onClick={() => void showPreview(Math.min(outputPageCount, previewIndex + 1))} disabled={previewIndex >= outputPageCount}>›</button><span className="preview-control-spacer" /><button className="open-pdf-button" type="button" onClick={() => void openOutput(output.pdfPath)}>Open PDF ↗</button></div> : <div className="preview-meta"><span>InDesign composition</span><span>·</span><span>Live export</span></div>}
+              {output ? <div className="preview-controls"><button type="button" aria-label={t("app.preview.previous")} onClick={() => void showPreview(Math.max(1, previewIndex - 1))} disabled={previewIndex <= 1}>‹</button><span>{t("app.preview.position", { current: previewIndex, total: outputPageCount })}</span><button type="button" aria-label={t("app.preview.next")} onClick={() => void showPreview(Math.min(outputPageCount, previewIndex + 1))} disabled={previewIndex >= outputPageCount}>›</button><span className="preview-control-spacer" /><button className="open-pdf-button" type="button" onClick={() => void openOutput(output.pdfPath)}>{t("app.preview.openPdf")}</button></div> : <div className="preview-meta"><span>{t("app.preview.metaComposition")}</span><span>·</span><span>{t("app.preview.metaLive")}</span></div>}
             </div>
           </section>
 
-          <footer className="content-footer"><span>Folio keeps InDesign as the source of truth for typography and page composition.</span><span>LOCAL WORKSPACE <i /></span></footer>
+          <footer className="content-footer"><span>{t("app.footer.note")}</span><span>{t("app.footer.local")} <i /></span></footer>
         </div>
       </main>
     </div>
@@ -494,12 +547,14 @@ function DiagnosticRow({ diagnostic }: { diagnostic: Diagnostic }) {
   return <div className={`diagnostic-row ${diagnostic.severity}`}><span className="diagnostic-marker">{diagnostic.severity === "error" ? "!" : diagnostic.severity === "warning" ? "△" : "i"}</span><div><strong>{diagnostic.message}</strong>{diagnostic.path && <small>{diagnostic.path}</small>}</div><span className="diagnostic-code">{diagnostic.code}</span></div>;
 }
 
-async function invokeHost(action: HostJob["action"], payload: Record<string, unknown>): Promise<Record<string, unknown>> {
+type Translate = TFunction;
+
+async function invokeHost(action: HostJob["action"], payload: Record<string, unknown>, t: Translate): Promise<Record<string, unknown>> {
   const job: HostJob = { schemaVersion: 1, jobId: crypto.randomUUID(), action, payload };
   const result: HostJobResult = await runHostJob(job);
   if (result.status !== "succeeded") {
     const messages = result.diagnostics.map((item) => item.message).filter(Boolean);
-    throw new Error(messages.join("\n") || `InDesign operation failed: ${action}.`);
+    throw new Error(messages.join("\n") || t("app.error.publishFailed", { action }));
   }
   return result.payload ?? {};
 }

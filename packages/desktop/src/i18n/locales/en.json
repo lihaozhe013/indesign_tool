@@ -1,0 +1,146 @@
+{
+  "app": {
+    "title": "Folio",
+    "nav": {
+      "workspace": "WORKSPACE",
+      "publish": "Publish article",
+      "currentArticle": "CURRENT ARTICLE"
+    },
+    "action": {
+      "openMarkdown": "Open Markdown",
+      "saveDraft": "Save draft",
+      "dismiss": "Dismiss",
+      "change": "Change",
+      "browse": "Browse"
+    },
+    "article": {
+      "untitled": "Untitled article",
+      "unsavedDraft": "Unsaved draft",
+      "unsavedChanges": "Unsaved changes"
+    },
+    "heading": {
+      "eyebrow": "PUBLISHING WORKFLOW",
+      "title": "Turn your story into pages.",
+      "subtitle": "Write in Markdown. Let InDesign handle the composition."
+    },
+    "editor": {
+      "title": "Article source",
+      "hint": "Write or open a Markdown file",
+      "format": "MARKDOWN",
+      "sourceLabel": "Markdown source",
+      "lineCount_one": "{{count}} line",
+      "lineCount_other": "{{count}} lines",
+      "blockCount_one": "{{count}} content block",
+      "blockCount_other": "{{count}} content blocks",
+      "blocked": "Fix parse errors to continue",
+      "stateChanged": "Unsaved changes",
+      "stateSaved": "Saved",
+      "stateNew": "New draft",
+      "ariaLabel": "Markdown article"
+    },
+    "template": {
+      "title": "InDesign template",
+      "hint": "Choose a role-labeled .indd file",
+      "select": "Select a template",
+      "untouched": "Your original file stays untouched",
+      "pageCount_one": "{{count}} page",
+      "pageCount_other": "{{count}} pages",
+      "styleCount_one": "{{count}} style scanned",
+      "styleCount_other": "{{count}} styles scanned",
+      "ready": "{{name}} is ready to publish",
+      "needsAttention": "Review template issues below"
+    },
+    "output": {
+      "title": "Output location",
+      "hint": "Choose a new editable document path",
+      "choose": "Choose output file",
+      "included": "A PDF and page previews are included"
+    },
+    "publish": {
+      "ready": "Ready when you are",
+      "hint": "InDesign will create an editable copy of your template.",
+      "action": "Publish article",
+      "working": "Working…",
+      "creates": "Creates a fresh INDD, PDF, and page previews"
+    },
+    "host": {
+      "checking": "Checking InDesign…",
+      "ready": "ready",
+      "connected": "InDesign {{version}}",
+      "unavailable": "InDesign unavailable",
+      "refresh": "Refresh connection"
+    },
+    "preflight": {
+      "overline": "PREFLIGHT",
+      "title": "Checks & issues",
+      "errorCount_one": "{{count}} error",
+      "errorCount_other": "{{count}} errors",
+      "warningCount_one": "{{count}} warning",
+      "warningCount_other": "{{count}} warnings",
+      "emptyTitle": "No issues found yet",
+      "emptyHint": "Markdown and template checks will appear here."
+    },
+    "preview": {
+      "overline": "OUTPUT PREVIEW",
+      "titleIdle": "Page preview",
+      "titleReady": "Generated pages",
+      "openIndd": "Open INDD ↗",
+      "openPdf": "Open PDF ↗",
+      "alt": "Preview of page {{page}}",
+      "emptyTitle": "Your pages will appear here",
+      "emptyHint": "Publish to see the InDesign composition.",
+      "previous": "Previous page",
+      "next": "Next page",
+      "position": "Page {{current}} of {{total}}",
+      "metaComposition": "InDesign composition",
+      "metaLive": "Live export"
+    },
+    "progress": {
+      "working": "Working with InDesign…",
+      "inspectTemplate": "Inspecting labeled template…",
+      "saveAndCheck": "Saving article and checking image files…",
+      "buildDocument": "Building the editable InDesign document…",
+      "compose": "Composing text and placing images…",
+      "reflow": "Adding pages and recomposing… ({{count}})",
+      "checkStructure": "Checking the saved document structure…",
+      "verify": "Verifying the editable document…",
+      "exportPdf": "Exporting PDF…",
+      "previews": "Creating page previews… ({{page}}/{{total}})",
+      "finalize": "Finalizing deliverables…"
+    },
+    "notice": {
+      "opened": "Opened {{file}}.",
+      "saved": "Saved {{file}}.",
+      "templateReady": "Template ready: {{name}}.",
+      "templateIssues": "The template scan completed with issues.",
+      "templateUnusable": "The template needs labeled Cover and Article roles, an article flow frame, and the required paragraph styles.",
+      "published_one": "Published {{file}} with {{count}} page.",
+      "published_other": "Published {{file}} with {{count}} pages.",
+      "fixMarkdown": "Fix the Markdown issues before publishing.",
+      "chooseTemplate": "Choose and inspect a labeled InDesign template first.",
+      "hostUnavailable": "InDesign is unavailable.",
+      "fixImages": "Resolve the listed image issues before publishing.",
+      "layoutIncomplete": "InDesign could not finish layout. The staged files were discarded.",
+      "verificationFailed": "Document verification failed. The staged files were discarded."
+    },
+    "error": {
+      "noTemplateScan": "InDesign did not return a template scan.",
+      "noLayoutPlan": "Could not create the InDesign layout plan.",
+      "noObservation": "InDesign did not return layout observations.",
+      "noDocumentDump": "InDesign did not return a document structure.",
+      "noExportPath": "InDesign did not confirm the export path.",
+      "noSavedArticle": "Publishing needs a saved Markdown article.",
+      "noPages": "InDesign created a document with no pages.",
+      "publishFailed": "InDesign operation failed: {{action}}."
+    },
+    "locale": {
+      "label": "Language",
+      "en": "English",
+      "zh-Hans": "简体中文"
+    },
+    "footer": {
+      "note": "Folio keeps InDesign as the source of truth for typography and page composition.",
+      "local": "LOCAL WORKSPACE"
+    }
+  }
+}
