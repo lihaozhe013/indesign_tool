@@ -18,10 +18,12 @@
       "unsavedDraft": "Unsaved draft",
       "unsavedChanges": "Unsaved changes"
     },
-    "heading": {
-      "eyebrow": "PUBLISHING WORKFLOW",
-      "title": "Turn your story into pages.",
-      "subtitle": "Write in Markdown. Let InDesign handle the composition."
+    "status": {
+      "preview": "Page preview",
+      "previewAria": "Open the page preview window",
+      "reportAria": "Open the checks report window",
+      "viewReport": "View report",
+      "allPassed": "All checks passed"
     },
     "editor": {
       "title": "Article source",
@@ -115,8 +117,6 @@
       "emptyHint": "Markdown and template checks will appear here."
     },
     "preview": {
-      "overline": "OUTPUT PREVIEW",
-      "titleIdle": "Page preview",
       "titleReady": "Generated pages",
       "openIndd": "Open INDD ↗",
       "openPdf": "Open PDF ↗",
@@ -129,9 +129,20 @@
       "position": "Page {{page}} · preview {{current}} of {{total}}",
       "noPreviews": "Page previews are unavailable; the INDD and report were kept.",
       "unavailableTitle": "No page preview was generated",
-      "unavailableHint": "Open the INDD and report to review the output and its checks.",
-      "metaComposition": "InDesign composition",
-      "metaLive": "Live export"
+      "unavailableHint": "Open the INDD and report to review the output and its checks."
+    },
+    "previewWindow": {
+      "title": "Generated pages",
+      "hint": "Page previews are exported live from the generated document.",
+      "autoRefresh": "This window refreshes after each publish.",
+      "loading": "Loading preview…"
+    },
+    "reportWindow": {
+      "hint": "Live checks from your Markdown, template, and latest publish.",
+      "filterAll": "All",
+      "filterErrors": "Errors",
+      "filterWarnings": "Warnings",
+      "emptyFiltered": "No issues in this view."
     },
     "progress": {
       "working": "Working with InDesign…",
@@ -233,10 +244,6 @@
       "label": "Language",
       "en": "English",
       "zh-Hans": "简体中文"
-    },
-    "footer": {
-      "note": "Folio keeps InDesign as the source of truth for typography and page composition.",
-      "local": "LOCAL WORKSPACE"
     }
   }
 }

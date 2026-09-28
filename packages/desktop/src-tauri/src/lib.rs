@@ -7,12 +7,13 @@ use base64::Engine;
 use rfd::AsyncFileDialog;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tauri::AppHandle;
+use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
 use uuid::Uuid;
 
 mod host_bridge;
 mod help;
 mod locale;
+mod workspace;
 
 /// Returns the stored interface locale, or `None` before the user has chosen one.
 #[tauri::command]
@@ -341,8 +342,24 @@ fn prepare_output_stage(output_path: String) -> Result<OutputStage, String> {
 
 #[tauri::command]
 fn finalize_output_stage(
+    app: AppHandle,
+    state: State<workspace::WorkspaceState>,
     output_path: String,
     stage_id: String,
+    report: String,
+    expected_pages: u32,
+) -> Result<OutputPaths, String> {
+    let files = finalize_stage_files(&output_path, &stage_id, report, expected_pages)?;
+    state.set_output(files.clone())?;
+    // An already-open preview window refreshes itself from this broadcast; a later opener pulls
+    // the stored result instead.
+    let _ = app.emit(workspace::OUTPUT_UPDATED_EVENT, files.clone());
+    Ok(files)
+}
+
+fn finalize_stage_files(
+    output_path: &str,
+    stage_id: &str,
     report: String,
     expected_pages: u32,
 ) -> Result<OutputPaths, String> {
@@ -468,7 +485,7 @@ fn finalize_output_stage(
     })
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct OutputPaths {
     document_path: String,
@@ -533,8 +550,66 @@ async fn open_output(path: String) -> Result<(), String> {
     }
 }
 
-fn ensure_extension(path: &PathBuf, allowed: &[&str]) -> Result<(), String> {
-    let extension = path
+/// Creates or focuses the auxiliary preview/report window. Window titles stay bilingual like
+/// the Help menu item, because native titles are set before the WebView can translate them.
+#[tauri::command]
+fn open_aux_window(app: AppHandle, kind: String) -> Result<(), String> {
+    let (label, file, title, size, min_size) = match kind.as_str() {
+        "preview" => (
+            "preview",
+            "preview.html",
+            "Folio · Page Preview / 页面预览",
+            (960.0, 700.0),
+            (620.0, 460.0),
+        ),
+        "report" => (
+            "report",
+            "report.html",
+            "Folio · Checks Report / 检查报告",
+            (820.0, 640.0),
+            (560.0, 420.0),
+        ),
+        other => return Err(format!("Unknown auxiliary window kind: {other}")),
+    };
+    if let Some(existing) = app.get_webview_window(label) {
+        let _ = existing.unminimize();
+        existing.show().map_err(|error| error.to_string())?;
+        existing.set_focus().map_err(|error| error.to_string())?;
+        return Ok(());
+    }
+    WebviewWindowBuilder::new(&app, label, WebviewUrl::App(file.into()))
+        .title(title)
+        .inner_size(size.0, size.1)
+        .min_inner_size(min_size.0, min_size.1)
+        .build()
+        .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+/// The main window owns the live diagnostic list; the report window pulls it and listens for
+/// these pushes. Storing it in shared state keeps window startup free of event races.
+#[tauri::command]
+fn remember_report(
+    app: AppHandle,
+    state: State<workspace::WorkspaceState>,
+    diagnostics: Vec<workspace::ClientDiagnostic>,
+) -> Result<(), String> {
+    state.set_report(diagnostics.clone())?;
+    app.emit(workspace::REPORT_UPDATED_EVENT, diagnostics)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn get_last_report(state: State<workspace::WorkspaceState>) -> Vec<workspace::ClientDiagnostic> {
+    state.report()
+}
+
+#[tauri::command]
+fn get_last_output(state: State<workspace::WorkspaceState>) -> Option<OutputPaths> {
+    state.output()
+}
+
+fn ensure_extension(path: &PathBuf, allowed: &[&str]) -> Result<(), String> {    let extension = path
         .extension()
         .and_then(|value| value.to_str())
         .unwrap_or_default()
@@ -577,6 +652,7 @@ fn require_nonempty_file(path: &Path, label: &str) -> Result<(), String> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_store::Builder::new().build())
+        .manage(workspace::WorkspaceState::default())
         .invoke_handler(tauri::generate_handler![
             open_markdown,
             save_markdown,
@@ -591,6 +667,10 @@ pub fn run() {
             prepare_output_stage,
             finalize_output_stage,
             discard_output_stage,
+            open_aux_window,
+            remember_report,
+            get_last_report,
+            get_last_output,
             get_locale,
             set_locale
         ])
@@ -617,7 +697,7 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::{ensure_extension, finalize_output_stage, has_url_scheme, prepare_output_stage};
+    use super::{ensure_extension, finalize_stage_files, has_url_scheme, prepare_output_stage};
     use std::fs;
     use std::path::PathBuf;
     use uuid::Uuid;
@@ -675,7 +755,7 @@ mod tests {
         )
         .unwrap();
 
-        let files = finalize_output_stage(output.to_string_lossy().into_owned(), stage.stage_id, "报告".into(), 2)
+        let files = finalize_stage_files(&output.to_string_lossy().into_owned(), &stage.stage_id, "报告".into(), 2)
             .unwrap();
         assert!(PathBuf::from(files.document_path).is_file());
         assert!(PathBuf::from(files.pdf_path.unwrap()).is_file());
@@ -693,7 +773,7 @@ mod tests {
         let output = root.join("article.indd");
         let stage = prepare_output_stage(output.to_string_lossy().into_owned()).unwrap();
         fs::write(&stage.document_path, b"indesign-document").unwrap();
-        let files = finalize_output_stage(output.to_string_lossy().into_owned(), stage.stage_id, "仅 INDD".into(), 2).unwrap();
+        let files = finalize_stage_files(&output.to_string_lossy().into_owned(), &stage.stage_id, "仅 INDD".into(), 2).unwrap();
         assert!(output.is_file());
         assert!(files.pdf_path.is_none());
         assert!(files.preview_directory.is_none());
@@ -719,7 +799,7 @@ mod tests {
         .unwrap();
         fs::write(PathBuf::from(&stage.preview_directory).join("page-002.png"), b"").unwrap();
 
-        let files = finalize_output_stage(output.to_string_lossy().into_owned(), stage.stage_id, "部分预览".into(), 2).unwrap();
+        let files = finalize_stage_files(&output.to_string_lossy().into_owned(), &stage.stage_id, "部分预览".into(), 2).unwrap();
         assert!(output.is_file());
         assert!(files.pdf_path.unwrap().ends_with("article.pdf"));
         assert_eq!(files.preview_pages, vec![1]);
@@ -735,7 +815,7 @@ mod tests {
         let output = root.join("article.indd");
         let stage = prepare_output_stage(output.to_string_lossy().into_owned()).unwrap();
         fs::write(&stage.document_path, b"").unwrap();
-        let error = finalize_output_stage(output.to_string_lossy().into_owned(), stage.stage_id, "报告".into(), 1).unwrap_err();
+        let error = finalize_stage_files(&output.to_string_lossy().into_owned(), &stage.stage_id, "报告".into(), 1).unwrap_err();
         assert!(error.contains("InDesign document is empty"));
         assert!(!output.exists());
         fs::remove_dir_all(root).unwrap();

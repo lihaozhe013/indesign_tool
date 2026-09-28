@@ -18,10 +18,12 @@
       "unsavedDraft": "未保存的草稿",
       "unsavedChanges": "有未保存的更改"
     },
-    "heading": {
-      "eyebrow": "发布流程",
-      "title": "把你的故事变成版面。",
-      "subtitle": "用 Markdown 写作，交给 InDesign 完成排版。"
+    "status": {
+      "preview": "页面预览",
+      "previewAria": "打开页面预览窗口",
+      "reportAria": "打开检查报告窗口",
+      "viewReport": "查看报告",
+      "allPassed": "检查全部通过"
     },
     "editor": {
       "title": "文章源文件",
@@ -109,8 +111,6 @@
       "emptyHint": "Markdown 与模板的检查结果会显示在这里。"
     },
     "preview": {
-      "overline": "输出预览",
-      "titleIdle": "页面预览",
       "titleReady": "已生成页面",
       "openIndd": "打开 INDD ↗",
       "openPdf": "打开 PDF ↗",
@@ -123,9 +123,20 @@
       "position": "第 {{page}} 页 · 第 {{current}} / {{total}} 张预览",
       "noPreviews": "页面预览不可用；已保留 INDD 与检查报告。",
       "unavailableTitle": "页面预览未生成",
-      "unavailableHint": "仍可打开 INDD 和检查报告查看成品与问题。",
-      "metaComposition": "InDesign 排版",
-      "metaLive": "实时导出"
+      "unavailableHint": "仍可打开 INDD 和检查报告查看成品与问题。"
+    },
+    "previewWindow": {
+      "title": "已生成页面",
+      "hint": "页面预览由生成的文档实时导出。",
+      "autoRefresh": "每次发布后此窗口会自动刷新。",
+      "loading": "正在加载预览…"
+    },
+    "reportWindow": {
+      "hint": "来自 Markdown、模板与最近一次发布的实时检查结果。",
+      "filterAll": "全部",
+      "filterErrors": "错误",
+      "filterWarnings": "警告",
+      "emptyFiltered": "当前筛选下没有问题。"
     },
     "progress": {
       "working": "正在与 InDesign 通信…",
@@ -226,10 +237,6 @@
       "label": "语言",
       "en": "English",
       "zh-Hans": "简体中文"
-    },
-    "footer": {
-      "note": "Folio 尽量保留内容；请根据检查报告逐步改善模板。",
-      "local": "本地工作区"
     }
   }
 }

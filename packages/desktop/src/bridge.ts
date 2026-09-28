@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import type { HostJob, HostJobResult } from "@folio/contracts";
+import type { Diagnostic, HostJob, HostJobResult } from "@folio/contracts";
 import { LOCALE_CHANGED_EVENT, type Locale } from "./i18n/locale.js";
 
 export interface OpenedTextFile {
@@ -104,4 +104,35 @@ export function setStoredLocale(locale: Locale): Promise<void> {
 
 export function onLocaleChanged(handler: (locale: Locale) => void): Promise<UnlistenFn> {
   return listen<string>(LOCALE_CHANGED_EVENT, ({ payload }) => handler(payload as Locale));
+}
+
+const OUTPUT_UPDATED_EVENT = "output-updated";
+const REPORT_UPDATED_EVENT = "report-updated";
+
+export type AuxWindowKind = "preview" | "report";
+
+/** Creates the auxiliary window, or brings it to the front when it is already open. */
+export function openAuxWindow(kind: AuxWindowKind): Promise<void> {
+  return invoke("open_aux_window", { kind });
+}
+
+/** Publishes the live diagnostic list to shared state so the report window can read it. */
+export function rememberReport(diagnostics: Diagnostic[]): Promise<void> {
+  return invoke("remember_report", { diagnostics });
+}
+
+export function getLastOutput(): Promise<OutputPaths | null> {
+  return invoke("get_last_output");
+}
+
+export function getLastReport(): Promise<Diagnostic[]> {
+  return invoke("get_last_report");
+}
+
+export function onOutputUpdated(handler: (output: OutputPaths | null) => void): Promise<UnlistenFn> {
+  return listen<OutputPaths | null>(OUTPUT_UPDATED_EVENT, ({ payload }) => handler(payload));
+}
+
+export function onReportUpdated(handler: (diagnostics: Diagnostic[]) => void): Promise<UnlistenFn> {
+  return listen<Diagnostic[]>(REPORT_UPDATED_EVENT, ({ payload }) => handler(payload));
 }

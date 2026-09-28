@@ -1,1 +1,1 @@
-{"default":{"identifier":"default","description":"Base capabilities for the desktop window.","local":true,"windows":["main"],"permissions":["core:default"]}}
+{"default":{"identifier":"default","description":"Base capabilities for the main and auxiliary preview/report windows.","local":true,"windows":["main","preview","report"],"permissions":["core:default"]}}
