@@ -10,8 +10,8 @@ use serde_json::Value;
 use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
 use uuid::Uuid;
 
-mod host_bridge;
 mod help;
+mod host_bridge;
 mod locale;
 mod workspace;
 
@@ -262,8 +262,10 @@ fn read_markdown_image(article_path: String, source: String) -> Result<String, S
     let article_directory = article_path
         .parent()
         .ok_or_else(|| "The Markdown article path is invalid.".to_string())?;
-    let article_directory = std::fs::canonicalize(article_directory).map_err(|error| error.to_string())?;
-    let image_path = std::fs::canonicalize(article_directory.join(&source)).map_err(|error| error.to_string())?;
+    let article_directory =
+        std::fs::canonicalize(article_directory).map_err(|error| error.to_string())?;
+    let image_path = std::fs::canonicalize(article_directory.join(&source))
+        .map_err(|error| error.to_string())?;
     if !image_path.is_file() {
         return Err("The image file was not found.".into());
     }
@@ -387,7 +389,9 @@ fn finalize_stage_files(
 
     require_nonempty_file(&stage_document, "InDesign document")?;
     let pdf_available = stage_pdf.is_file()
-        && std::fs::metadata(&stage_pdf).map(|meta| meta.len() > 0).unwrap_or(false);
+        && std::fs::metadata(&stage_pdf)
+            .map(|meta| meta.len() > 0)
+            .unwrap_or(false);
     let mut preview_pages = Vec::new();
     let mut finalization_warnings = Vec::new();
     if !pdf_available {
@@ -395,26 +399,41 @@ fn finalize_stage_files(
     }
     if stage_preview.is_dir() {
         match std::fs::read_dir(&stage_preview) {
-            Ok(entries) => for entry in entries.filter_map(Result::ok) {
-                let path = entry.path();
-                let name = path.file_name().and_then(|value| value.to_str()).unwrap_or("");
-                let page = name.strip_prefix("page-").and_then(|value| value.strip_suffix(".png"))
-                    .and_then(|value| value.parse::<u32>().ok());
-                if let Some(page) = page {
-                    if path.is_file() && std::fs::metadata(&path).map(|meta| meta.len() > 0).unwrap_or(false) {
-                        preview_pages.push(page);
-                    } else {
-                        let _ = std::fs::remove_file(&path);
+            Ok(entries) => {
+                for entry in entries.filter_map(Result::ok) {
+                    let path = entry.path();
+                    let name = path
+                        .file_name()
+                        .and_then(|value| value.to_str())
+                        .unwrap_or("");
+                    let page = name
+                        .strip_prefix("page-")
+                        .and_then(|value| value.strip_suffix(".png"))
+                        .and_then(|value| value.parse::<u32>().ok());
+                    if let Some(page) = page {
+                        if path.is_file()
+                            && std::fs::metadata(&path)
+                                .map(|meta| meta.len() > 0)
+                                .unwrap_or(false)
+                        {
+                            preview_pages.push(page);
+                        } else {
+                            let _ = std::fs::remove_file(&path);
+                        }
                     }
                 }
-            },
+            }
             Err(error) => finalization_warnings.push(format!("无法检查页面预览目录：{error}")),
         }
     }
     preview_pages.sort_unstable();
     preview_pages.dedup();
     if preview_pages.len() < expected_pages as usize {
-        finalization_warnings.push(format!("页面预览仅成功生成 {} / {} 页。", preview_pages.len(), expected_pages));
+        finalization_warnings.push(format!(
+            "页面预览仅成功生成 {} / {} 页。",
+            preview_pages.len(),
+            expected_pages
+        ));
     }
     for path in [&final_document, &final_report] {
         if path.exists() {
@@ -425,7 +444,10 @@ fn finalize_stage_files(
         return Err(format!("Output already exists: {}", final_pdf.display()));
     }
     if !preview_pages.is_empty() && final_preview.exists() {
-        return Err(format!("Output already exists: {}", final_preview.display()));
+        return Err(format!(
+            "Output already exists: {}",
+            final_preview.display()
+        ));
     }
     std::fs::rename(&stage_document, &final_document)
         .map_err(|error| format!("Could not finalize generated InDesign document: {error}"))?;
@@ -437,7 +459,9 @@ fn finalize_stage_files(
                 false
             }
         }
-    } else { false };
+    } else {
+        false
+    };
     let preview_moved = if !preview_pages.is_empty() {
         match std::fs::rename(&stage_preview, &final_preview) {
             Ok(()) => true,
@@ -447,11 +471,15 @@ fn finalize_stage_files(
                 false
             }
         }
-    } else { false };
+    } else {
+        false
+    };
     let mut report = report;
     if !finalization_warnings.is_empty() {
         report.push_str("\n\n成果整理提示：\n");
-        for warning in &finalization_warnings { report.push_str(&format!("- {warning}\n")); }
+        for warning in &finalization_warnings {
+            report.push_str(&format!("- {warning}\n"));
+        }
     }
     report.push_str("\n最终文件清单：\n");
     report.push_str(&format!("- INDD：{}\n", final_document.display()));
@@ -461,7 +489,15 @@ fn finalize_stage_files(
         report.push_str("- PDF：未生成\n");
     }
     if preview_moved {
-        report.push_str(&format!("- 页面预览目录：{}\n- 成功页面：{}\n", final_preview.display(), preview_pages.iter().map(u32::to_string).collect::<Vec<_>>().join("、")));
+        report.push_str(&format!(
+            "- 页面预览目录：{}\n- 成功页面：{}\n",
+            final_preview.display(),
+            preview_pages
+                .iter()
+                .map(u32::to_string)
+                .collect::<Vec<_>>()
+                .join("、")
+        ));
     } else {
         report.push_str("- 页面预览：未生成\n");
     }
@@ -470,9 +506,15 @@ fn finalize_stage_files(
         .and_then(|_| std::fs::rename(&stage_report, &final_report));
     if let Err(error) = report_result {
         let _ = std::fs::remove_file(&final_document);
-        if pdf_moved { let _ = std::fs::remove_file(&final_pdf); }
-        if preview_moved { let _ = std::fs::remove_dir_all(&final_preview); }
-        return Err(format!("Could not finalize the required Chinese report: {error}"));
+        if pdf_moved {
+            let _ = std::fs::remove_file(&final_pdf);
+        }
+        if preview_moved {
+            let _ = std::fs::remove_dir_all(&final_preview);
+        }
+        return Err(format!(
+            "Could not finalize the required Chinese report: {error}"
+        ));
     }
     let _ = std::fs::remove_dir_all(&stage_dir);
     Ok(OutputPaths {
@@ -609,7 +651,8 @@ fn get_last_output(state: State<workspace::WorkspaceState>) -> Option<OutputPath
     state.output()
 }
 
-fn ensure_extension(path: &PathBuf, allowed: &[&str]) -> Result<(), String> {    let extension = path
+fn ensure_extension(path: &PathBuf, allowed: &[&str]) -> Result<(), String> {
+    let extension = path
         .extension()
         .and_then(|value| value.to_str())
         .unwrap_or_default()
@@ -729,10 +772,21 @@ mod tests {
         fs::write(&article, "article").unwrap();
         let result = super::check_assets(
             article.to_string_lossy().into_owned(),
-            vec!["missing.png".into(), "https://example.test/image.png".into()],
-        ).unwrap();
+            vec![
+                "missing.png".into(),
+                "https://example.test/image.png".into(),
+            ],
+        )
+        .unwrap();
         assert!(result.resolved.is_empty());
-        assert_eq!(result.diagnostics.iter().map(|item| item.severity).collect::<Vec<_>>(), vec!["warning", "warning"]);
+        assert_eq!(
+            result
+                .diagnostics
+                .iter()
+                .map(|item| item.severity)
+                .collect::<Vec<_>>(),
+            vec!["warning", "warning"]
+        );
         fs::remove_dir_all(root).unwrap();
     }
 
@@ -755,12 +809,22 @@ mod tests {
         )
         .unwrap();
 
-        let files = finalize_stage_files(&output.to_string_lossy().into_owned(), &stage.stage_id, "报告".into(), 2)
-            .unwrap();
+        let files = finalize_stage_files(
+            &output.to_string_lossy().into_owned(),
+            &stage.stage_id,
+            "报告".into(),
+            2,
+        )
+        .unwrap();
         assert!(PathBuf::from(files.document_path).is_file());
         assert!(PathBuf::from(files.pdf_path.unwrap()).is_file());
         assert_eq!(files.preview_pages, vec![1, 2]);
-        assert_eq!(fs::read_dir(files.preview_directory.unwrap()).unwrap().count(), 2);
+        assert_eq!(
+            fs::read_dir(files.preview_directory.unwrap())
+                .unwrap()
+                .count(),
+            2
+        );
         assert!(PathBuf::from(files.report_path).is_file());
         assert!(files.finalization_warnings.is_empty());
         fs::remove_dir_all(root).unwrap();
@@ -773,7 +837,13 @@ mod tests {
         let output = root.join("article.indd");
         let stage = prepare_output_stage(output.to_string_lossy().into_owned()).unwrap();
         fs::write(&stage.document_path, b"indesign-document").unwrap();
-        let files = finalize_stage_files(&output.to_string_lossy().into_owned(), &stage.stage_id, "仅 INDD".into(), 2).unwrap();
+        let files = finalize_stage_files(
+            &output.to_string_lossy().into_owned(),
+            &stage.stage_id,
+            "仅 INDD".into(),
+            2,
+        )
+        .unwrap();
         assert!(output.is_file());
         assert!(files.pdf_path.is_none());
         assert!(files.preview_directory.is_none());
@@ -797,13 +867,25 @@ mod tests {
             b"preview-one",
         )
         .unwrap();
-        fs::write(PathBuf::from(&stage.preview_directory).join("page-002.png"), b"").unwrap();
+        fs::write(
+            PathBuf::from(&stage.preview_directory).join("page-002.png"),
+            b"",
+        )
+        .unwrap();
 
-        let files = finalize_stage_files(&output.to_string_lossy().into_owned(), &stage.stage_id, "部分预览".into(), 2).unwrap();
+        let files = finalize_stage_files(
+            &output.to_string_lossy().into_owned(),
+            &stage.stage_id,
+            "部分预览".into(),
+            2,
+        )
+        .unwrap();
         assert!(output.is_file());
         assert!(files.pdf_path.unwrap().ends_with("article.pdf"));
         assert_eq!(files.preview_pages, vec![1]);
-        assert!(PathBuf::from(files.preview_directory.unwrap()).join("page-001.png").is_file());
+        assert!(PathBuf::from(files.preview_directory.unwrap())
+            .join("page-001.png")
+            .is_file());
         assert_eq!(files.finalization_warnings.len(), 1);
         fs::remove_dir_all(root).unwrap();
     }
@@ -815,7 +897,13 @@ mod tests {
         let output = root.join("article.indd");
         let stage = prepare_output_stage(output.to_string_lossy().into_owned()).unwrap();
         fs::write(&stage.document_path, b"").unwrap();
-        let error = finalize_stage_files(&output.to_string_lossy().into_owned(), &stage.stage_id, "报告".into(), 1).unwrap_err();
+        let error = finalize_stage_files(
+            &output.to_string_lossy().into_owned(),
+            &stage.stage_id,
+            "报告".into(),
+            1,
+        )
+        .unwrap_err();
         assert!(error.contains("InDesign document is empty"));
         assert!(!output.exists());
         fs::remove_dir_all(root).unwrap();

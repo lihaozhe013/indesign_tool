@@ -2,7 +2,9 @@
   "name": "@folio/cli",
   "version": "0.1.0",
   "type": "module",
-  "bin": { "folio": "./dist/main.js" },
+  "bin": {
+    "folio": "./dist/main.js"
+  },
   "dependencies": {
     "@folio/contracts": "workspace:*",
     "@folio/core": "workspace:*",

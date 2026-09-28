@@ -1,4 +1,4 @@
-import type { Diagnostic, SemanticDocument } from "@folio/contracts";
+import type { Diagnostic, SemanticDocument } from '@folio/contracts';
 
 export type AssetAvailability = (source: string) => boolean;
 
@@ -8,20 +8,20 @@ export function validateAssetReferences(
 ): Diagnostic[] {
   const diagnostics: Diagnostic[] = [];
   for (const block of document.blocks) {
-    if (block.type !== "image") continue;
+    if (block.type !== 'image') continue;
     if (/^[a-z][a-z\d+.-]*:/i.test(block.src)) {
       diagnostics.push({
-        code: "Asset.UnsupportedScheme",
-        message: "Only local relative image assets are supported in v1: " + block.src,
-        severity: "warning",
-        path: "blocks." + block.id + ".src"
+        code: 'Asset.UnsupportedScheme',
+        message: 'Only local relative image assets are supported in v1: ' + block.src,
+        severity: 'warning',
+        path: 'blocks.' + block.id + '.src'
       });
     } else if (!isAvailable(block.src)) {
       diagnostics.push({
-        code: "Asset.Missing",
-        message: "Image asset was not found: " + block.src,
-        severity: "warning",
-        path: "blocks." + block.id + ".src",
+        code: 'Asset.Missing',
+        message: 'Image asset was not found: ' + block.src,
+        severity: 'warning',
+        path: 'blocks.' + block.id + '.src',
         context: { source: block.src }
       });
     }

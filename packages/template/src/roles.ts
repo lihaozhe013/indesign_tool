@@ -4,23 +4,23 @@ import type {
   StyleRole,
   TemplateRoleAssignments,
   TemplateScan
-} from "@folio/contracts";
-import { validateTemplateScan } from "@folio/contracts";
+} from '@folio/contracts';
+import { validateTemplateScan } from '@folio/contracts';
 
-const PAGE_ROLES: PageRole[] = ["Cover", "Article", "Ending", "ImageFeature"];
+const PAGE_ROLES: PageRole[] = ['Cover', 'Article', 'Ending', 'ImageFeature'];
 const STYLE_ROLES: StyleRole[] = [
-  "ArticleTitle",
-  "Subtitle",
-  "SectionHeading",
-  "Subheading",
-  "Body",
-  "Quote",
-  "Caption",
-  "Emphasis",
-  "Link",
-  "Code",
-  "InlineImage",
-  "HeroImage"
+  'ArticleTitle',
+  'Subtitle',
+  'SectionHeading',
+  'Subheading',
+  'Body',
+  'Quote',
+  'Caption',
+  'Emphasis',
+  'Link',
+  'Code',
+  'InlineImage',
+  'HeroImage'
 ];
 
 export interface DeriveRoleAssignmentsOptions {
@@ -44,21 +44,25 @@ export function deriveRoleAssignments(
   options: DeriveRoleAssignmentsOptions
 ): DeriveRoleAssignmentsResult {
   const diagnostics = [...validateTemplateScan(scan)];
-  if (!scan || typeof scan !== "object") return { diagnostics };
+  if (!scan || typeof scan !== 'object') return { diagnostics };
   if (!options.templateId.trim() || !options.name.trim()) {
-    diagnostics.push(error("Template.IdentityMissing", "templateId and name are required", "templateId"));
+    diagnostics.push(
+      error('Template.IdentityMissing', 'templateId and name are required', 'templateId')
+    );
   }
-  if (diagnostics.some((item) => item.severity === "error")) return { diagnostics };
+  if (diagnostics.some((item) => item.severity === 'error')) return { diagnostics };
 
-  const pageRoles: TemplateRoleAssignments["pageRoles"] = [];
-  const styleRoles: TemplateRoleAssignments["styleRoles"] = [];
-  const frameRoles: TemplateRoleAssignments["frameRoles"] = [];
+  const pageRoles: TemplateRoleAssignments['pageRoles'] = [];
+  const styleRoles: TemplateRoleAssignments['styleRoles'] = [];
+  const frameRoles: TemplateRoleAssignments['frameRoles'] = [];
 
   for (const page of [...scan.pages, ...scan.parentPages]) {
     const label = page.roleLabel;
     if (!label) continue;
     if (!PAGE_ROLES.includes(label as PageRole)) {
-      diagnostics.push(error("Template.UnknownRole", "Unknown page role label: " + label, "pages." + page.ref));
+      diagnostics.push(
+        error('Template.UnknownRole', 'Unknown page role label: ' + label, 'pages.' + page.ref)
+      );
       continue;
     }
     pageRoles.push({ ref: page.ref, role: label as PageRole });
@@ -74,7 +78,9 @@ export function deriveRoleAssignments(
     const label = style.roleLabel;
     if (!label) continue;
     if (!STYLE_ROLES.includes(label as StyleRole)) {
-      diagnostics.push(error("Template.UnknownRole", "Unknown style role label: " + label, "styles." + style.ref));
+      diagnostics.push(
+        error('Template.UnknownRole', 'Unknown style role label: ' + label, 'styles.' + style.ref)
+      );
       continue;
     }
     styleRoles.push({ ref: style.ref, role: label as StyleRole });
@@ -82,19 +88,31 @@ export function deriveRoleAssignments(
 
   const duplicatePageRoles = findDuplicate(pageRoles.map((entry) => entry.role));
   for (const role of duplicatePageRoles) {
-    diagnostics.push(error("Template.PageRoleAmbiguous", "Multiple pages declare role label " + role, "pages." + role));
+    diagnostics.push(
+      error(
+        'Template.PageRoleAmbiguous',
+        'Multiple pages declare role label ' + role,
+        'pages.' + role
+      )
+    );
   }
   const duplicateFrameRoles = findDuplicate(frameRoles.map((entry) => entry.role));
   for (const role of duplicateFrameRoles) {
     // article-flow is allowed to appear more than once only when the extra
     // frames are resolved to different pages by the inventory step; flag it
     // here so the compile step reports the real ambiguity.
-    if (role !== "article-flow") {
-      diagnostics.push(error("Template.FrameRoleAmbiguous", "Multiple frames declare role label " + role, "frames." + role));
+    if (role !== 'article-flow') {
+      diagnostics.push(
+        error(
+          'Template.FrameRoleAmbiguous',
+          'Multiple frames declare role label ' + role,
+          'frames.' + role
+        )
+      );
     }
   }
 
-  if (diagnostics.some((item) => item.severity === "error")) return { diagnostics };
+  if (diagnostics.some((item) => item.severity === 'error')) return { diagnostics };
   return {
     assignments: {
       schemaVersion: 1,
@@ -120,5 +138,5 @@ function findDuplicate(values: string[]): string[] {
 }
 
 function error(code: string, message: string, path: string): Diagnostic {
-  return { code, message, severity: "error", path };
+  return { code, message, severity: 'error', path };
 }

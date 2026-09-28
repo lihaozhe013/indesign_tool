@@ -23,9 +23,7 @@ pub fn attach_menu_item(app: &AppHandle) -> Result<(), String> {
     let manual = MenuItemBuilder::with_id(MANUAL_MENU_ID, "使用手册 / User Manual")
         .build(app)
         .map_err(|error| error.to_string())?;
-    help_menu
-        .append(&manual)
-        .map_err(|error| error.to_string())
+    help_menu.append(&manual).map_err(|error| error.to_string())
 }
 
 pub fn open_manual() -> Result<(), String> {

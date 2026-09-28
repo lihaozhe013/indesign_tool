@@ -1,10 +1,16 @@
-import React from "react";
-import { createRoot } from "react-dom/client";
-import type { ReactNode } from "react";
-import { getStoredLocale, onLocaleChanged } from "./bridge.js";
-import { applyDocumentLocale, createLocaleApplier, setupI18n, systemLocale, type Locale } from "./i18n/index.js";
-import { isSupportedLocale } from "./i18n/locale.js";
-import "./styles.css";
+import React from 'react';
+import { createRoot } from 'react-dom/client';
+import type { ReactNode } from 'react';
+import { getStoredLocale, onLocaleChanged } from './bridge.js';
+import {
+  applyDocumentLocale,
+  createLocaleApplier,
+  setupI18n,
+  systemLocale,
+  type Locale
+} from './i18n/index.js';
+import { isSupportedLocale } from './i18n/locale.js';
+import './styles.css';
 
 /**
  * Auxiliary windows follow the stored locale but never write it: the main window settles the
@@ -12,8 +18,8 @@ import "./styles.css";
  * locale-changed event.
  */
 export function mountAuxWindow(component: ReactNode): void {
-  const root = document.getElementById("root");
-  if (!root) throw new Error("Application root is missing");
+  const root = document.getElementById('root');
+  if (!root) throw new Error('Application root is missing');
 
   const instance = setupI18n(systemLocale());
   applyDocumentLocale(instance.language as Locale);
@@ -26,9 +32,5 @@ export function mountAuxWindow(component: ReactNode): void {
     .catch(() => undefined);
   void onLocaleChanged(applyLocale).catch(() => undefined);
 
-  createRoot(root).render(
-    <React.StrictMode>
-      {component}
-    </React.StrictMode>
-  );
+  createRoot(root).render(<React.StrictMode>{component}</React.StrictMode>);
 }

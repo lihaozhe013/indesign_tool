@@ -5,8 +5,8 @@ import type {
   HostAdapter,
   HostObservation,
   SemanticDocument
-} from "@folio/contracts";
-import { planDocument, respondToObservation } from "./planner.js";
+} from '@folio/contracts';
+import { planDocument, respondToObservation } from './planner.js';
 
 export interface PublishInput {
   templatePath: string;
@@ -20,7 +20,7 @@ export interface PublishOptions {
 }
 
 export interface PublishResult {
-  status: "complete" | "degraded" | "failed";
+  status: 'complete' | 'degraded' | 'failed';
   ir?: DocumentIR;
   observation?: HostObservation;
   diagnostics: Diagnostic[];
@@ -33,16 +33,16 @@ export async function publishDocument(
   options: PublishOptions = {}
 ): Promise<PublishResult> {
   const planned = planDocument(input.document, input.template);
-  if (!planned.ir) return { status: "failed", diagnostics: planned.diagnostics, complete: false };
+  if (!planned.ir) return { status: 'failed', diagnostics: planned.diagnostics, complete: false };
 
   let ir = planned.ir;
   let diagnostics = [...planned.diagnostics];
   let observation: HostObservation;
   try {
-    observation = await host.render({ ...input, ir, mode: "create" });
+    observation = await host.render({ ...input, ir, mode: 'create' });
   } catch (error) {
     diagnostics.push(hostFailure(error));
-    return { status: "failed", ir, diagnostics, complete: false };
+    return { status: 'failed', ir, diagnostics, complete: false };
   }
   const maxPages = options.maxPages ?? 500;
 
@@ -51,24 +51,24 @@ export async function publishDocument(
     diagnostics = deduplicateDiagnostics([...diagnostics, ...response.diagnostics]);
     ir = response.ir;
     if (response.complete) {
-      const failed = diagnostics.some((item) => item.severity === "error");
-      const degraded = diagnostics.some((item) => item.severity === "warning");
+      const failed = diagnostics.some((item) => item.severity === 'error');
+      const degraded = diagnostics.some((item) => item.severity === 'warning');
       return {
-        status: failed ? "failed" : degraded ? "degraded" : "complete",
+        status: failed ? 'failed' : degraded ? 'degraded' : 'complete',
         ir,
         observation,
         diagnostics,
         complete: !failed
       };
     }
-    if (!response.addedPages || diagnostics.some((item) => item.severity === "error")) {
-      return { status: "failed", ir, observation, diagnostics, complete: false };
+    if (!response.addedPages || diagnostics.some((item) => item.severity === 'error')) {
+      return { status: 'failed', ir, observation, diagnostics, complete: false };
     }
     try {
-      observation = await host.render({ ...input, ir, mode: "appendPages" });
+      observation = await host.render({ ...input, ir, mode: 'appendPages' });
     } catch (error) {
       diagnostics.push(hostFailure(error));
-      return { status: "failed", ir, observation, diagnostics, complete: false };
+      return { status: 'failed', ir, observation, diagnostics, complete: false };
     }
   }
 }
@@ -76,9 +76,9 @@ export async function publishDocument(
 function hostFailure(error: unknown): Diagnostic {
   const details = error instanceof Error ? error.message : String(error);
   return {
-    code: "Publish.HostOperationFailed",
+    code: 'Publish.HostOperationFailed',
     message: details,
-    severity: "error",
+    severity: 'error',
     context: { details }
   };
 }
@@ -86,7 +86,7 @@ function hostFailure(error: unknown): Diagnostic {
 function deduplicateDiagnostics(diagnostics: Diagnostic[]): Diagnostic[] {
   const seen = new Set<string>();
   return diagnostics.filter((diagnostic) => {
-    const key = [diagnostic.code, diagnostic.path ?? "", diagnostic.message].join("\u0000");
+    const key = [diagnostic.code, diagnostic.path ?? '', diagnostic.message].join('\u0000');
     if (seen.has(key)) return false;
     seen.add(key);
     return true;

@@ -14,7 +14,7 @@ Mixed language: The final proof still needs native composition.
 
 > A quote can include straight quotation marks and punctuation.
 
-![Layout diagram](assets/layout.svg "A sample figure")
+![Layout diagram](assets/layout.svg 'A sample figure')
 
 ---
 

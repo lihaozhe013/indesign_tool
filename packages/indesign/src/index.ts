@@ -10,9 +10,9 @@ import type {
   HostObservation,
   SemanticDocument,
   TemplateInventory
-} from "@folio/contracts";
+} from '@folio/contracts';
 
-export * from "./materialize.js";
+export * from './materialize.js';
 
 export interface IndesignDriver {
   inspectTemplate(templatePath: string): Promise<TemplateInventory>;
@@ -22,18 +22,21 @@ export interface IndesignDriver {
     document: SemanticDocument;
     template: CompiledTemplate;
     ir: DocumentIR;
-    mode: "create" | "appendPages";
+    mode: 'create' | 'appendPages';
   }): Promise<HostObservation>;
   dump(documentPath: string): Promise<DocumentDump>;
-  export(documentPath: string, outputPath: string, format: "pdf" | "png" | "jpeg"): Promise<void>;
+  export(documentPath: string, outputPath: string, format: 'pdf' | 'png' | 'jpeg'): Promise<void>;
 }
 
 export function createIndesignAdapter(driver: IndesignDriver): HostAdapter {
   return {
-    inspectTemplate: (templatePath) => run("inspectTemplate", () => driver.inspectTemplate(templatePath)),
-    render: (input) => run("render", () => driver.render(input)),
-    dump: async (documentPath) => canonicalizeDocumentDump(await run("dump", () => driver.dump(documentPath))),
-    export: (documentPath, outputPath, format) => run("export", () => driver.export(documentPath, outputPath, format))
+    inspectTemplate: (templatePath) =>
+      run('inspectTemplate', () => driver.inspectTemplate(templatePath)),
+    render: (input) => run('render', () => driver.render(input)),
+    dump: async (documentPath) =>
+      canonicalizeDocumentDump(await run('dump', () => driver.dump(documentPath))),
+    export: (documentPath, outputPath, format) =>
+      run('export', () => driver.export(documentPath, outputPath, format))
   };
 }
 
@@ -42,8 +45,8 @@ export class HostOperationError extends Error {
   readonly causeValue: unknown;
 
   constructor(operation: string, causeValue: unknown) {
-    super("InDesign host operation failed: " + operation);
-    this.name = "HostOperationError";
+    super('InDesign host operation failed: ' + operation);
+    this.name = 'HostOperationError';
     this.operation = operation;
     this.causeValue = causeValue;
   }
@@ -56,7 +59,7 @@ export async function processPendingJobs(
   const jobs = await queue.listPending();
   const jobIds = new Set<string>();
   for (const job of jobs) {
-    if (jobIds.has(job.jobId)) throw new Error("Queue contains duplicate job ID: " + job.jobId);
+    if (jobIds.has(job.jobId)) throw new Error('Queue contains duplicate job ID: ' + job.jobId);
     jobIds.add(job.jobId);
   }
   const results: HostJobResult[] = [];
@@ -67,12 +70,12 @@ export async function processPendingJobs(
       result = {
         schemaVersion: 1,
         jobId: job.jobId,
-        status: "succeeded",
+        status: 'succeeded',
         diagnostics: [],
         payload: await handler(job)
       };
     } catch (error) {
-      result = failedJob(job, "HostJob.ExecutionFailed", errorMessage(error));
+      result = failedJob(job, 'HostJob.ExecutionFailed', errorMessage(error));
     }
 
     await queue.writeResult(result);
@@ -86,8 +89,8 @@ function failedJob(job: HostJob, code: string, message: string): HostJobResult {
   return {
     schemaVersion: 1,
     jobId: job.jobId,
-    status: "failed",
-    diagnostics: [{ code, message, severity: "error" }]
+    status: 'failed',
+    diagnostics: [{ code, message, severity: 'error' }]
   };
 }
 
@@ -108,13 +111,19 @@ export function canonicalizeDocumentDump(dump: DocumentDump): DocumentDump {
         overset: story.overset,
         paragraphs: story.paragraphs.map((paragraph) => ({ ...paragraph }))
       })),
-    frames: dump.frames.map((frame) => ({
-      ...frame,
-      ...(frame.bounds ? { bounds: frame.bounds.map(roundMeasurement) as [number, number, number, number] } : {})
-    })).sort((left, right) =>
-      (left.pageIndex ?? Number.MAX_SAFE_INTEGER) - (right.pageIndex ?? Number.MAX_SAFE_INTEGER)
-      || (left.semanticRole ?? "").localeCompare(right.semanticRole ?? "")
-    ),
+    frames: dump.frames
+      .map((frame) => ({
+        ...frame,
+        ...(frame.bounds
+          ? { bounds: frame.bounds.map(roundMeasurement) as [number, number, number, number] }
+          : {})
+      }))
+      .sort(
+        (left, right) =>
+          (left.pageIndex ?? Number.MAX_SAFE_INTEGER) -
+            (right.pageIndex ?? Number.MAX_SAFE_INTEGER) ||
+          (left.semanticRole ?? '').localeCompare(right.semanticRole ?? '')
+      ),
     missingAssets: [...new Set(dump.missingAssets)].sort(),
     missingFonts: [...new Set(dump.missingFonts)].sort()
   };

@@ -2,38 +2,143 @@
 
 ## Current host status
 
-The workstation has InDesign 2026 version `21.0.0.192` on macOS. The corrected host-version probe reported DOM `21.0`, UXP `uxp-9.0.3-local`, and one open document. These are measured values from this installation. The UXP Developer Tool is not installed. Do not treat host version or API documentation as proof that an unprobed DOM behavior works.
+The workstation has InDesign 2026 version `21.0.0.192` on macOS. The corrected host-version probe
+reported DOM `21.0`, UXP `uxp-9.0.3-local`, and one open document. These are measured values from
+this installation. The UXP Developer Tool is not installed. Do not treat host version or API
+documentation as proof that an unprobed DOM behavior works.
 
-The designer's report package is copied to an ignored, disposable folder under `artifacts/host/indesign-21.0.0.192/`. The original `.indd` was not modified; its SHA-256 remained `abc750924fa0332061f7e6636c28d85b54ba9e42eb3573af414de498f1d0f1e4` after inspection. The DOM scan of the open disposable copy reports 20 pages, 9 spreads, 6 parent spreads, 261 stories, 893 page items (190 text, 10 graphic, 693 other), and 15/20/9 paragraph/character/object styles. It reports two missing link instances for the same JPG, seven out-of-date link instances, one substituted font face, and no overset stories. Seventy-one stories have no direct text-frame references in the scan; their use is not inferred. The packaged IDML independently describes 261 stories, 15 paragraph styles, 20 character styles, and 9 object styles, matching the DOM counts. The validated scan and host record are saved under the ignored `artifacts/host/indesign-21.0.0.192/probe-run/` directory.
+The designer's report package is copied to an ignored, disposable folder under
+`artifacts/host/indesign-21.0.0.192/`. The original `.indd` was not modified; its SHA-256 remained
+`abc750924fa0332061f7e6636c28d85b54ba9e42eb3573af414de498f1d0f1e4` after inspection. The DOM scan of
+the open disposable copy reports 20 pages, 9 spreads, 6 parent spreads, 261 stories, 893 page items
+(190 text, 10 graphic, 693 other), and 15/20/9 paragraph/character/object styles. It reports two
+missing link instances for the same JPG, seven out-of-date link instances, one substituted font
+face, and no overset stories. Seventy-one stories have no direct text-frame references in the scan;
+their use is not inferred. The packaged IDML independently describes 261 stories, 15 paragraph
+styles, 20 character styles, and 9 object styles, matching the DOM counts. The validated scan and
+host record are saved under the ignored `artifacts/host/indesign-21.0.0.192/probe-run/` directory.
 
-The `Host Version Probe.idjs` and passive scanner `Folio Template Scan.idjs` are installed in this host's user Scripts Panel folder: `~/Library/Preferences/Adobe InDesign/Version 21.0-J/zh_CN/Scripts/Scripts Panel/`. InDesign 2026 on this workstation uses the `21.0-J` preferences directory, not `21.0`; discover the active location by right-clicking the User folder in the Scripts panel and choosing Reveal in Finder instead of assuming the directory name. The probe returned `uxp-9.0.3-local`. The scanner initially failed because `document.allPageItems` is indexed rather than exposing an `item()` method; the fallback is now in place. The scan completed without modifying the disposable document and its JSON passed `TemplateScan v1` validation. On this workstation, UXP logs are under `~/Library/Logs/Adobe/Adobe InDesign 2024/`, even though the installed application is InDesign 2026. Keep the report and host-version evidence in the ignored host-artifact folder; do not add designer source files, article text, images, or fonts to Git.
+The `Host Version Probe.idjs` and passive scanner `Folio Template Scan.idjs` are installed in this
+host's user Scripts Panel folder:
+`~/Library/Preferences/Adobe InDesign/Version 21.0-J/zh_CN/Scripts/Scripts Panel/`. InDesign 2026 on
+this workstation uses the `21.0-J` preferences directory, not `21.0`; discover the active location
+by right-clicking the User folder in the Scripts panel and choosing Reveal in Finder instead of
+assuming the directory name. The probe returned `uxp-9.0.3-local`. The scanner initially failed
+because `document.allPageItems` is indexed rather than exposing an `item()` method; the fallback is
+now in place. The scan completed without modifying the disposable document and its JSON passed
+`TemplateScan v1` validation. On this workstation, UXP logs are under
+`~/Library/Logs/Adobe/Adobe InDesign 2024/`, even though the installed application is InDesign 2026.
+Keep the report and host-version evidence in the ignored host-artifact folder; do not add designer
+source files, article text, images, or fonts to Git.
 
-The paragraph style probe created and applied `Folio Probe Body`, read the applied style back, and closed its scratch document without saving. Its result was `success: true`; the open-document count returned from 1 to 1. The record is saved under the ignored host-artifact folder. The character style probe later created and applied `Folio Probe Emphasis` with the same pattern and also recorded `success: true` with an unchanged document count; it passed on two independent runs on 2026-09-24. Both records live in `artifacts/host/indesign-21.0.0.192/probe-run/`. Both probes verify in-memory behavior only; style persistence across save/reopen is a separate probe.
+The paragraph style probe created and applied `Folio Probe Body`, read the applied style back, and
+closed its scratch document without saving. Its result was `success: true`; the open-document count
+returned from 1 to 1. The record is saved under the ignored host-artifact folder. The character
+style probe later created and applied `Folio Probe Emphasis` with the same pattern and also recorded
+`success: true` with an unchanged document count; it passed on two independent runs on 2026-09-24.
+Both records live in `artifacts/host/indesign-21.0.0.192/probe-run/`. Both probes verify in-memory
+behavior only; style persistence across save/reopen is a separate probe.
 
-The script-label probes settled the annotation mechanism (ADR 0003). In-memory: `insertLabel`/`extractLabel` under the key `com.publisher.role` round-trip on document, page, text frame, and paragraph/character/object style objects; an unset key reads `""`; a second key on the same object is isolated; a display `label` property also round-trips; unique and duplicate label values are resolvable by scan. Persistence: a labeled scratch document saved by string path, closed, and reopened in separate runs — all labels, including style labels, read back correctly and lookups return the same results. `label-reopen-probe` attempt 1 failed only because it used the nonexistent `getByName` (correct UXP lookup is `itemByName`); attempt 2 was invalidated because a leaked still-open document satisfied reads from memory, so later versions refuse to read a target that is already open. `Page.id` (242) and `PageItem.id` (271/294/317) were stable across save/reopen while `Document.id` changed every session, confirming identity must come from labels/names. The scanner `template-scan.idjs` now reads the same final key. All records are in the probe-run artifact folder.
+The script-label probes settled the annotation mechanism (ADR 0003). In-memory:
+`insertLabel`/`extractLabel` under the key `com.publisher.role` round-trip on document, page, text
+frame, and paragraph/character/object style objects; an unset key reads `""`; a second key on the
+same object is isolated; a display `label` property also round-trips; unique and duplicate label
+values are resolvable by scan. Persistence: a labeled scratch document saved by string path, closed,
+and reopened in separate runs — all labels, including style labels, read back correctly and lookups
+return the same results. `label-reopen-probe` attempt 1 failed only because it used the nonexistent
+`getByName` (correct UXP lookup is `itemByName`); attempt 2 was invalidated because a leaked
+still-open document satisfied reads from memory, so later versions refuse to read a target that is
+already open. `Page.id` (242) and `PageItem.id` (271/294/317) were stable across save/reopen while
+`Document.id` changed every session, confirming identity must come from labels/names. The scanner
+`template-scan.idjs` now reads the same final key. All records are in the probe-run artifact folder.
 
-Story-flow and page probes established the composition contract. Text separators are decisive: `\r` (code 13) creates a paragraph and `\n` (code 10) is a soft line break, and `paragraph.contents` includes the trailing `\r` for every paragraph except the last. A text frame creates its own story; setting `frameA.nextTextFrame = frameB` produces a two-way link (`previousTextFrame`), a shared `parentStory`, and `story.textContainers.length === 2`, with the story text preserved exactly across Chinese/mixed content. A 44 pt frame overflows (40 paragraphs, 1590 characters, `story.overflows === true`) without losing text, and threading a second frame clears overset (`overflows === false`) with the same character count. Page operations: a new document has one two-page parent spread; `page.appliedMaster` assigns and reads back by id, `pages.add()` and `page.duplicate()` keep the master, and `pageItem.override(page)` adopts a labeled parent frame onto a document page, preserving label and contents. Parent items are not listed on the applied page's own `pageItems`/`textFrames`; they are discoverable through document/master page-item enumeration, and frame ownership follows geometric bounds rather than the collection the frame was added to (the default blank document is A4, 297 × 210 mm in this host, so raw page-relative coordinates can land on the pasteboard). The structure save/reopen pair persists all of it: page ids `[242, 351]`, applied master `244`, adopted flow frame `277`, story `301`, threaded containers `[319, 342]` on page `242`, paragraph style `275` applied to every paragraph, character style `276` applied on the second paragraph, no overset, and no open-document residue. `Page`, `PageItem`, `Story`, and style ids were stable across the reopen.
+Story-flow and page probes established the composition contract. Text separators are decisive: `\r`
+(code 13) creates a paragraph and `\n` (code 10) is a soft line break, and `paragraph.contents`
+includes the trailing `\r` for every paragraph except the last. A text frame creates its own story;
+setting `frameA.nextTextFrame = frameB` produces a two-way link (`previousTextFrame`), a shared
+`parentStory`, and `story.textContainers.length === 2`, with the story text preserved exactly across
+Chinese/mixed content. A 44 pt frame overflows (40 paragraphs, 1590 characters,
+`story.overflows === true`) without losing text, and threading a second frame clears overset
+(`overflows === false`) with the same character count. Page operations: a new document has one
+two-page parent spread; `page.appliedMaster` assigns and reads back by id, `pages.add()` and
+`page.duplicate()` keep the master, and `pageItem.override(page)` adopts a labeled parent frame onto
+a document page, preserving label and contents. Parent items are not listed on the applied page's
+own `pageItems`/`textFrames`; they are discoverable through document/master page-item enumeration,
+and frame ownership follows geometric bounds rather than the collection the frame was added to (the
+default blank document is A4, 297 × 210 mm in this host, so raw page-relative coordinates can land
+on the pasteboard). The structure save/reopen pair persists all of it: page ids `[242, 351]`,
+applied master `244`, adopted flow frame `277`, story `301`, threaded containers `[319, 342]` on
+page `242`, paragraph style `275` applied to every paragraph, character style `276` applied on the
+second paragraph, no overset, and no open-document residue. `Page`, `PageItem`, `Story`, and style
+ids were stable across the reopen.
 
-Object, graphic, anchor, wrap, export, and font probes cover the remaining placement and output contracts. Named object styles are created, labeled, and applied with `applyObjectStyle(style, true)`; a styled `strokeWeight` takes effect on the frame, and the applied style reads back by id. `page.place(path)` returns one graphic parented to an auto-created `Rectangle` frame; `graphic.itemLink.filePath`/`status` (`NORMAL`) resolve, `imageTypeName` reports `PNG`, and `effectivePpi` reports `[72, 72]`; a missing path throws a localized error. `frame.fit(FitOptions.FILL_PROPORTIONALLY)` scales the graphic, not the frame: the frame bounds stay put while the graphic bounds expand and its effective PPI drops `72 → 18`, and `frameFittingOptions.fittingOnEmptyFrame` reports `FILL_PROPORTIONALLY`. Placing a graphic at `story.insertionPoints.item(-1)` creates an inline anchored `Rectangle`/`Image` whose host is a `Character` in the text story with `anchoredPosition INLINE_POSITION`, appending one U+FFFC marker character without changing the existing text. A wrap of `BOUNDING_BOX_TEXT_WRAP` with offsets `[2, 2, 2, 2]` reads back intact and recomposes the story (lines `9 → 13`, characters unchanged), and wrap enums must be compared through `String(value)` because the DOM returns wrapper objects. `exportFile` produces outputs without dialogs: PDF with `pageRange "1-2"` wrote a two-page PDF, and PNG at 72 dpi wrote 595 × 842 images per page; it returns `undefined`. `document.fonts` enumerates used fonts with `name`/`family`/`styleName`/`status`, and `app.fonts` holds every installed face (1848 here); a missing font name resolves to a font object whose `isValid` is still `true` but whose `status` is `NOT_AVAILABLE`, so status — not validity — is the missing-font signal; assigning an unknown font name to `paragraph.font` is a silent no-op.
+Object, graphic, anchor, wrap, export, and font probes cover the remaining placement and output
+contracts. Named object styles are created, labeled, and applied with
+`applyObjectStyle(style, true)`; a styled `strokeWeight` takes effect on the frame, and the applied
+style reads back by id. `page.place(path)` returns one graphic parented to an auto-created
+`Rectangle` frame; `graphic.itemLink.filePath`/`status` (`NORMAL`) resolve, `imageTypeName` reports
+`PNG`, and `effectivePpi` reports `[72, 72]`; a missing path throws a localized error.
+`frame.fit(FitOptions.FILL_PROPORTIONALLY)` scales the graphic, not the frame: the frame bounds stay
+put while the graphic bounds expand and its effective PPI drops `72 → 18`, and
+`frameFittingOptions.fittingOnEmptyFrame` reports `FILL_PROPORTIONALLY`. Placing a graphic at
+`story.insertionPoints.item(-1)` creates an inline anchored `Rectangle`/`Image` whose host is a
+`Character` in the text story with `anchoredPosition INLINE_POSITION`, appending one U+FFFC marker
+character without changing the existing text. A wrap of `BOUNDING_BOX_TEXT_WRAP` with offsets
+`[2, 2, 2, 2]` reads back intact and recomposes the story (lines `9 → 13`, characters unchanged),
+and wrap enums must be compared through `String(value)` because the DOM returns wrapper objects.
+`exportFile` produces outputs without dialogs: PDF with `pageRange "1-2"` wrote a two-page PDF, and
+PNG at 72 dpi wrote 595 × 842 images per page; it returns `undefined`. `document.fonts` enumerates
+used fonts with `name`/`family`/`styleName`/`status`, and `app.fonts` holds every installed face
+(1848 here); a missing font name resolves to a font object whose `isValid` is still `true` but whose
+`status` is `NOT_AVAILABLE`, so status — not validity — is the missing-font signal; assigning an
+unknown font name to `paragraph.font` is a silent no-op.
 
 ## Host API hazards observed
 
-- `Document.fullName` returns a Promise that never settles from a Scripts Panel/`do script` execution. Reading it without awaiting produced `"[object Promise]"`; awaiting it hung the script with no record and a leaked open document. Probes and the adapter must use synchronous `Document.name` or verify files from the shell side.
-- Collection lookup is `itemByName`; `getByName` does not exist and surfaced as silently empty label reads.
-- A hung async probe leaks its scratch document and corrupts later runs' document-count guards and reopen evidence. `cleanup-scratch-probe.idjs` closes allowlisted scratch documents, and `run-indesign-probe.mjs --cleanup <path>` removes stale targets before reruns; the reopen probe refuses an already-open target.
-- In one save run with a leaked zombie document present, `openDocumentCountAfter` read 2 immediately after a successful save+close; with a clean environment the count guard held. Treat cross-run environment checks (no stray documents, no stale target file) as part of probe hygiene.
-- `setTimeout` promises never settle inside a Scripts Panel execution (there is no timer pump), so in-script delays hang the probe exactly like the `fullName` Promise. Do not wait inside probes; settle externally between runs.
-- Immediately after `save()` + `close()`, `app.documents.length` can transiently include the save-as copy that InDesign finalizes on its own; the count usually returns to baseline within a second. Save probes record the immediate count and tolerate one extra document, then confirm the environment with `open-documents-probe.idjs`.
-- Frame ownership follows geometric bounds, not the collection targeted: on a two-page parent spread, positive-x bounds land on the right page, and out-of-page bounds place a frame on the pasteboard with a null `parentPage`. Derive frame geometry from the target page's `bounds`.
-- Enum-like values (wrap mode, link status, fit options) come back as wrapper objects: `Object.keys` is empty and identity comparison fails, so compare `String(value)`.
-- Correction (2026-09-27): the earlier file-system probe used an unawaited async IIFE. That execution form did not keep the UXP script alive for pending file operations. A corrected top-level-await script completed temporary-file write, read, and delete on InDesign 21.0.0.192 / DOM 21.0 / UXP 9.0.3-local. See `docs/implementation-plan.md` for the desktop HostJob transport.
-- AppleScript `do script ... with arguments` values are not delivered to a `.idjs` script; its wrapped `arguments` object contains only internal values (exports, script path, directory). Pass data through generated script content or a job-file transport; the desktop bridge uses per-job files.
+- `Document.fullName` returns a Promise that never settles from a Scripts Panel/`do script`
+  execution. Reading it without awaiting produced `"[object Promise]"`; awaiting it hung the script
+  with no record and a leaked open document. Probes and the adapter must use synchronous
+  `Document.name` or verify files from the shell side.
+- Collection lookup is `itemByName`; `getByName` does not exist and surfaced as silently empty label
+  reads.
+- A hung async probe leaks its scratch document and corrupts later runs' document-count guards and
+  reopen evidence. `cleanup-scratch-probe.idjs` closes allowlisted scratch documents, and
+  `run-indesign-probe.mjs --cleanup <path>` removes stale targets before reruns; the reopen probe
+  refuses an already-open target.
+- In one save run with a leaked zombie document present, `openDocumentCountAfter` read 2 immediately
+  after a successful save+close; with a clean environment the count guard held. Treat cross-run
+  environment checks (no stray documents, no stale target file) as part of probe hygiene.
+- `setTimeout` promises never settle inside a Scripts Panel execution (there is no timer pump), so
+  in-script delays hang the probe exactly like the `fullName` Promise. Do not wait inside probes;
+  settle externally between runs.
+- Immediately after `save()` + `close()`, `app.documents.length` can transiently include the save-as
+  copy that InDesign finalizes on its own; the count usually returns to baseline within a second.
+  Save probes record the immediate count and tolerate one extra document, then confirm the
+  environment with `open-documents-probe.idjs`.
+- Frame ownership follows geometric bounds, not the collection targeted: on a two-page parent
+  spread, positive-x bounds land on the right page, and out-of-page bounds place a frame on the
+  pasteboard with a null `parentPage`. Derive frame geometry from the target page's `bounds`.
+- Enum-like values (wrap mode, link status, fit options) come back as wrapper objects: `Object.keys`
+  is empty and identity comparison fails, so compare `String(value)`.
+- Correction (2026-09-27): the earlier file-system probe used an unawaited async IIFE. That
+  execution form did not keep the UXP script alive for pending file operations. A corrected
+  top-level-await script completed temporary-file write, read, and delete on InDesign 21.0.0.192 /
+  DOM 21.0 / UXP 9.0.3-local. See `docs/implementation-plan.md` for the desktop HostJob transport.
+- AppleScript `do script ... with arguments` values are not delivered to a `.idjs` script; its
+  wrapped `arguments` object contains only internal values (exports, script path, directory). Pass
+  data through generated script content or a job-file transport; the desktop bridge uses per-job
+  files.
 
 ## Automated probe execution
 
-On macOS, InDesign's AppleScript dictionary exposes `do script ... language uxpscript`, which runs a UXP `.idjs` file from any POSIX path without the Scripts panel, UXP Developer Tool, or user interaction. The return value is not propagated to AppleScript; scripts run asynchronously, and `console.log` evidence still lands in the newest `~/Library/Logs/Adobe/Adobe InDesign 2024/UXPLogs_*.log` under the probe's `FOLIO_*_V*` tag.
+On macOS, InDesign's AppleScript dictionary exposes `do script ... language uxpscript`, which runs a
+UXP `.idjs` file from any POSIX path without the Scripts panel, UXP Developer Tool, or user
+interaction. The return value is not propagated to AppleScript; scripts run asynchronously, and
+`console.log` evidence still lands in the newest
+`~/Library/Logs/Adobe/Adobe InDesign 2024/UXPLogs_*.log` under the probe's `FOLIO_*_V*` tag.
 
-`scripts/run-indesign-probe.mjs` (development tooling only; not part of the product adapter) executes that channel and harvests the record:
+`scripts/run-indesign-probe.mjs` (development tooling only; not part of the product adapter)
+executes that channel and harvests the record:
 
 ```bash
 node scripts/run-indesign-probe.mjs packages/indesign/probes/<probe>.idjs \
@@ -41,35 +146,40 @@ node scripts/run-indesign-probe.mjs packages/indesign/probes/<probe>.idjs \
   --out artifacts/host/indesign-21.0.0.192/probe-run/<name>.json
 ```
 
-This channel is used by both development probes and the macOS desktop host bridge. Product Rust code starts InDesign through Apple Events; all UXP script source and direct InDesign DOM access stay in `packages/indesign`.
-
+This channel is used by both development probes and the macOS desktop host bridge. Product Rust code
+starts InDesign through Apple Events; all UXP script source and direct InDesign DOM access stay in
+`packages/indesign`.
 
 ## Procedure
 
 1. Open the disposable template, never the designer's source document.
-2. Run `host-version-probe.idjs` and `template-scan.idjs`. Record the application version, UXP version, DOM version, operating system, input document hash, and scan output.
-3. Run one capability probe at a time, via `scripts/run-indesign-probe.mjs` or the Scripts panel. Save each probe's input, result, and disposable output with the host-version identifier.
-4. For persistence claims, save, close, reopen, and query the same objects in a separate run. In-memory success does not establish persistence.
-5. Add a host contract test only for behavior confirmed by the recorded output. A failing or unavailable API remains unsupported until an alternative is probed.
+2. Run `host-version-probe.idjs` and `template-scan.idjs`. Record the application version, UXP
+   version, DOM version, operating system, input document hash, and scan output.
+3. Run one capability probe at a time, via `scripts/run-indesign-probe.mjs` or the Scripts panel.
+   Save each probe's input, result, and disposable output with the host-version identifier.
+4. For persistence claims, save, close, reopen, and query the same objects in a separate run.
+   In-memory success does not establish persistence.
+5. Add a host contract test only for behavior confirmed by the recorded output. A failing or
+   unavailable API remains unsupported until an alternative is probed.
 
 ## Probe matrix
 
-| Capability | Probe question | Required evidence | Status |
-| --- | --- | --- | --- |
-| Paragraph styles | Can a named style be created, applied, and read back in a scratch document? | Created/applied style names and scratch-document cleanup | Pass in memory; persistence not run |
-| Character styles | Can a named style be created, applied, and read back in a scratch document? | Created/applied style names and scratch-document cleanup | Pass in memory; persistence not run |
-| Object styles | Can a style be applied to a placed graphic frame and read back? | Style identity and frame properties | Pass: create, label, apply, styled property readback |
-| Script labels | Do namespaced keyed labels survive save/reopen and locate uniquely? | Key/value report before and after reopen | Pass in memory and across save/reopen |
-| Parent pages and page operations | Can a template parent be assigned and an appropriate page duplicated? | Page count, parent identity, and item placement | Pass: assign, add, duplicate, adopt parent frame |
-| Stories and threading | Can the adapter populate one story and link template frames in order? | Story text and previous/next frame chain | Pass: separators, contents readback, two-frame thread |
-| Overset | Does the host report the expected overset state before and after adding flow capacity? | `overflows` and page/frame counts | Pass: overset clears after threading with no text loss |
-| Anchored objects | Can an image frame be anchored at the semantic block location? | Story position and anchored frame identity | Pass: inline placement at an insertion point |
-| Graphics and fitting | Can a graphic be placed, its parent frame styled, and fitting applied? | Link status, frame bounds, and fit state | Pass: link/type/PPI readback, fit scales content |
-| Text wrap | Can wrap mode and offsets be applied and read back? | Wrap properties and exported page | Pass: wrap applied, story recomposed (9 → 13 lines) |
-| Export | Can configured exports run without dialogs? | File existence, page count, and export settings | Pass: multi-page PDF and per-page PNG written |
-| Font substitution | Can missing/substituted fonts be detected reliably? | Host-reported font state and diagnostic mapping | Pass for detection: `status === NOT_AVAILABLE`; substitution on a real missing-font document not exercised |
-| Stable identity | Which IDs remain stable across save/reopen and duplicate operations? | Identity comparison across operations | Pass for page, page item, story, and style ids; `Document.id` is session-local |
-| UXP file access | Can a UXP script read, write, and delete per-job local files? | File URLs, top-level await, and a complete temporary-file round trip | Pass: top-level-await write/read/delete completed on InDesign 21.0.0.192; the desktop bridge uses an isolated app-cache folder per job |
+| Capability                       | Probe question                                                                         | Required evidence                                                    | Status                                                                                                                                 |
+| -------------------------------- | -------------------------------------------------------------------------------------- | -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Paragraph styles                 | Can a named style be created, applied, and read back in a scratch document?            | Created/applied style names and scratch-document cleanup             | Pass in memory; persistence not run                                                                                                    |
+| Character styles                 | Can a named style be created, applied, and read back in a scratch document?            | Created/applied style names and scratch-document cleanup             | Pass in memory; persistence not run                                                                                                    |
+| Object styles                    | Can a style be applied to a placed graphic frame and read back?                        | Style identity and frame properties                                  | Pass: create, label, apply, styled property readback                                                                                   |
+| Script labels                    | Do namespaced keyed labels survive save/reopen and locate uniquely?                    | Key/value report before and after reopen                             | Pass in memory and across save/reopen                                                                                                  |
+| Parent pages and page operations | Can a template parent be assigned and an appropriate page duplicated?                  | Page count, parent identity, and item placement                      | Pass: assign, add, duplicate, adopt parent frame                                                                                       |
+| Stories and threading            | Can the adapter populate one story and link template frames in order?                  | Story text and previous/next frame chain                             | Pass: separators, contents readback, two-frame thread                                                                                  |
+| Overset                          | Does the host report the expected overset state before and after adding flow capacity? | `overflows` and page/frame counts                                    | Pass: overset clears after threading with no text loss                                                                                 |
+| Anchored objects                 | Can an image frame be anchored at the semantic block location?                         | Story position and anchored frame identity                           | Pass: inline placement at an insertion point                                                                                           |
+| Graphics and fitting             | Can a graphic be placed, its parent frame styled, and fitting applied?                 | Link status, frame bounds, and fit state                             | Pass: link/type/PPI readback, fit scales content                                                                                       |
+| Text wrap                        | Can wrap mode and offsets be applied and read back?                                    | Wrap properties and exported page                                    | Pass: wrap applied, story recomposed (9 → 13 lines)                                                                                    |
+| Export                           | Can configured exports run without dialogs?                                            | File existence, page count, and export settings                      | Pass: multi-page PDF and per-page PNG written                                                                                          |
+| Font substitution                | Can missing/substituted fonts be detected reliably?                                    | Host-reported font state and diagnostic mapping                      | Pass for detection: `status === NOT_AVAILABLE`; substitution on a real missing-font document not exercised                             |
+| Stable identity                  | Which IDs remain stable across save/reopen and duplicate operations?                   | Identity comparison across operations                                | Pass for page, page item, story, and style ids; `Document.id` is session-local                                                         |
+| UXP file access                  | Can a UXP script read, write, and delete per-job local files?                          | File URLs, top-level await, and a complete temporary-file round trip | Pass: top-level-await write/read/delete completed on InDesign 21.0.0.192; the desktop bridge uses an isolated app-cache folder per job |
 
 ## Official Adobe references
 
@@ -85,4 +195,5 @@ This channel is used by both development probes and the macOS desktop host bridg
 - [UXP file operations and permission model](https://developer.adobe.com/indesign/uxp/resources/recipes/file-operation/)
 - [InDesign Server object-model differences](https://developer.adobe.com/indesign/uxp/scripts/tutorials/ids-object-model/)
 
-Keep each probe minimal. Do not promote an undocumented assumption into an adapter abstraction before recording a result and adding a contract test.
+Keep each probe minimal. Do not promote an undocumented assumption into an adapter abstraction
+before recording a result and adding a contract test.

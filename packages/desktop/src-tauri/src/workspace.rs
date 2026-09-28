@@ -35,7 +35,10 @@ pub struct WorkspaceState {
 
 impl WorkspaceState {
     pub fn set_output(&self, output: OutputPaths) -> Result<(), String> {
-        let mut guard = self.output.lock().map_err(|_| LOCK_UNAVAILABLE.to_string())?;
+        let mut guard = self
+            .output
+            .lock()
+            .map_err(|_| LOCK_UNAVAILABLE.to_string())?;
         *guard = Some(output);
         Ok(())
     }
@@ -45,13 +48,19 @@ impl WorkspaceState {
     }
 
     pub fn set_report(&self, report: Vec<ClientDiagnostic>) -> Result<(), String> {
-        let mut guard = self.report.lock().map_err(|_| LOCK_UNAVAILABLE.to_string())?;
+        let mut guard = self
+            .report
+            .lock()
+            .map_err(|_| LOCK_UNAVAILABLE.to_string())?;
         *guard = report;
         Ok(())
     }
 
     pub fn report(&self) -> Vec<ClientDiagnostic> {
-        self.report.lock().map(|guard| guard.clone()).unwrap_or_default()
+        self.report
+            .lock()
+            .map(|guard| guard.clone())
+            .unwrap_or_default()
     }
 }
 

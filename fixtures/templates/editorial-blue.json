@@ -8,11 +8,21 @@
     { "ref": "ending-page", "name": "Ending", "source": "page", "role": "Ending" }
   ],
   "frames": [
-    { "ref": "article-flow-frame", "pageRef": "article-page", "name": "Main flow", "role": "article-flow", "kind": "text" }
+    {
+      "ref": "article-flow-frame",
+      "pageRef": "article-page",
+      "name": "Main flow",
+      "role": "article-flow",
+      "kind": "text"
+    }
   ],
   "styles": [
     { "kind": "paragraph", "name": "ArticleTitle", "qualifiedName": "Editorial / ArticleTitle" },
-    { "kind": "paragraph", "name": "SectionHeading", "qualifiedName": "Editorial / SectionHeading" },
+    {
+      "kind": "paragraph",
+      "name": "SectionHeading",
+      "qualifiedName": "Editorial / SectionHeading"
+    },
     { "kind": "paragraph", "name": "Body", "qualifiedName": "Editorial / Body" },
     { "kind": "paragraph", "name": "Quote", "qualifiedName": "Editorial / Quote" },
     { "kind": "paragraph", "name": "Caption", "qualifiedName": "Editorial / Caption" },

@@ -284,8 +284,7 @@ mod tests {
     #[cfg(target_os = "macos")]
     #[test]
     fn waits_for_a_completion_marker_after_the_launcher_exits() {
-        let root =
-            std::env::temp_dir().join(format!("folio-host-job-{}", uuid::Uuid::new_v4()));
+        let root = std::env::temp_dir().join(format!("folio-host-job-{}", uuid::Uuid::new_v4()));
         fs::create_dir_all(&root).unwrap();
         let mut child = std::process::Command::new("/usr/bin/true").spawn().unwrap();
         let error = wait_for_completion(&mut child, &root.join("done.txt"), Duration::from_secs(1))
@@ -297,8 +296,7 @@ mod tests {
     #[cfg(target_os = "macos")]
     #[test]
     fn reports_a_failed_launcher_without_waiting_for_the_job_timeout() {
-        let root =
-            std::env::temp_dir().join(format!("folio-host-job-{}", uuid::Uuid::new_v4()));
+        let root = std::env::temp_dir().join(format!("folio-host-job-{}", uuid::Uuid::new_v4()));
         fs::create_dir_all(&root).unwrap();
         let mut child = std::process::Command::new("/usr/bin/false")
             .spawn()
@@ -313,8 +311,7 @@ mod tests {
     #[cfg(target_os = "macos")]
     #[test]
     fn kills_a_launcher_after_the_host_timeout() {
-        let root =
-            std::env::temp_dir().join(format!("folio-host-job-{}", uuid::Uuid::new_v4()));
+        let root = std::env::temp_dir().join(format!("folio-host-job-{}", uuid::Uuid::new_v4()));
         fs::create_dir_all(&root).unwrap();
         let mut child = std::process::Command::new("/bin/sleep")
             .arg("5")

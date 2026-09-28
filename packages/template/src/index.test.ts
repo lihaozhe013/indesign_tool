@@ -1,53 +1,77 @@
-import { describe, expect, it } from "vitest";
-import { makeInventory } from "@folio/test-support";
-import { compileTemplate } from "./index.js";
+import { describe, expect, it } from 'vitest';
+import { makeInventory } from '@folio/test-support';
+import { compileTemplate } from './index.js';
 
-describe("compileTemplate", () => {
-  it("compiles page, flow-frame, and named style roles deterministically", () => {
+describe('compileTemplate', () => {
+  it('compiles page, flow-frame, and named style roles deterministically', () => {
     const result = compileTemplate(makeInventory());
-    expect(result.diagnostics.every((item) => item.severity !== "error")).toBe(true);
-    expect(result.diagnostics.map((item) => item.code)).toContain("Template.StyleFallback");
-    expect(result.template?.pageRoles.Article?.flowFrameRef).toBe("article-flow-frame");
-    expect(result.template?.styleRoles.Body).toBe("Editorial / Body");
+    expect(result.diagnostics.every((item) => item.severity !== 'error')).toBe(true);
+    expect(result.diagnostics.map((item) => item.code)).toContain('Template.StyleFallback');
+    expect(result.template?.pageRoles.Article?.flowFrameRef).toBe('article-flow-frame');
+    expect(result.template?.styleRoles.Body).toBe('Editorial / Body');
   });
 
-  it("compiles with missing page roles, styles, and flow frames using fallbacks", () => {
+  it('compiles with missing page roles, styles, and flow frames using fallbacks', () => {
     const inventory = makeInventory();
-    inventory.pages = inventory.pages.filter((page) => page.role !== "Cover");
+    inventory.pages = inventory.pages.filter((page) => page.role !== 'Cover');
     inventory.frames = [];
-    inventory.styles = inventory.styles.filter((style) => style.name !== "Body");
+    inventory.styles = inventory.styles.filter((style) => style.name !== 'Body');
     const result = compileTemplate(inventory);
     expect(result.template).toBeDefined();
-    expect(result.diagnostics.map((item) => item.code)).toEqual(expect.arrayContaining([
-      "Template.PageRoleFallback", "Template.ArticleFlowMissing", "Template.StyleFallback"
-    ]));
-    expect(result.template?.frameRoles["article-flow"]).toBe("$auto:article-flow");
-    expect(result.template?.frameRoles["hero-title"]).toBe("$auto:hero-title");
+    expect(result.diagnostics.map((item) => item.code)).toEqual(
+      expect.arrayContaining([
+        'Template.PageRoleFallback',
+        'Template.ArticleFlowMissing',
+        'Template.StyleFallback'
+      ])
+    );
+    expect(result.template?.frameRoles['article-flow']).toBe('$auto:article-flow');
+    expect(result.template?.frameRoles['hero-title']).toBe('$auto:hero-title');
   });
 
-  it("rejects duplicate flow references and style kind mismatches", () => {
+  it('rejects duplicate flow references and style kind mismatches', () => {
     const inventory = makeInventory();
-    inventory.frames.push({ ref: "duplicate-flow", pageRef: "article-page", name: "Second flow", role: "article-flow", kind: "text" });
-    inventory.styles.find((style) => style.name === "Body")!.kind = "character";
+    inventory.frames.push({
+      ref: 'duplicate-flow',
+      pageRef: 'article-page',
+      name: 'Second flow',
+      role: 'article-flow',
+      kind: 'text'
+    });
+    inventory.styles.find((style) => style.name === 'Body')!.kind = 'character';
     const result = compileTemplate(inventory);
-    expect(result.diagnostics.map((item) => item.code)).toContain("Template.ArticleFlowAmbiguous");
-    expect(result.diagnostics.map((item) => item.code)).toContain("Template.StyleKindMismatch");
+    expect(result.diagnostics.map((item) => item.code)).toContain('Template.ArticleFlowAmbiguous');
+    expect(result.diagnostics.map((item) => item.code)).toContain('Template.StyleKindMismatch');
   });
 
-  it("uses plugin-assigned semantic style roles even when designers use different style names", () => {
+  it('uses plugin-assigned semantic style roles even when designers use different style names', () => {
     const inventory = makeInventory();
-    const body = inventory.styles.find((style) => style.name === "Body")!;
-    body.name = "Paragraph / Chinese";
-    body.qualifiedName = "Editorial / Paragraph / Chinese";
-    body.role = "Body";
+    const body = inventory.styles.find((style) => style.name === 'Body')!;
+    body.name = 'Paragraph / Chinese';
+    body.qualifiedName = 'Editorial / Paragraph / Chinese';
+    body.role = 'Body';
     const result = compileTemplate(inventory);
-    expect(result.template?.styleRoles.Body).toBe("Editorial / Paragraph / Chinese");
+    expect(result.template?.styleRoles.Body).toBe('Editorial / Paragraph / Chinese');
   });
 
-  it("rejects repeated frame roles instead of silently overwriting their mapping", () => {
+  it('rejects repeated frame roles instead of silently overwriting their mapping', () => {
     const inventory = makeInventory();
-    inventory.frames.push({ ref: "duplicate-caption", pageRef: "article-page", name: "Caption frame", role: "caption", kind: "text" });
-    inventory.frames.push({ ref: "duplicate-caption-2", pageRef: "article-page", name: "Another caption", role: "caption", kind: "text" });
-    expect(compileTemplate(inventory).diagnostics.map((item) => item.code)).toContain("Template.FrameRoleAmbiguous");
+    inventory.frames.push({
+      ref: 'duplicate-caption',
+      pageRef: 'article-page',
+      name: 'Caption frame',
+      role: 'caption',
+      kind: 'text'
+    });
+    inventory.frames.push({
+      ref: 'duplicate-caption-2',
+      pageRef: 'article-page',
+      name: 'Another caption',
+      role: 'caption',
+      kind: 'text'
+    });
+    expect(compileTemplate(inventory).diagnostics.map((item) => item.code)).toContain(
+      'Template.FrameRoleAmbiguous'
+    );
   });
 });

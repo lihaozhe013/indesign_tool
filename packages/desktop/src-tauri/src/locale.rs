@@ -43,7 +43,9 @@ pub fn apply(app: &AppHandle, locale: &str) -> Result<(), String> {
     if !is_supported(locale) {
         return Err(format!("Unsupported locale: {locale}"));
     }
-    let store = app.store(SETTINGS_FILE).map_err(|error| error.to_string())?;
+    let store = app
+        .store(SETTINGS_FILE)
+        .map_err(|error| error.to_string())?;
     store.set(LOCALE_KEY, locale);
     store.save().map_err(|error| error.to_string())?;
     sync_checkmarks(app, locale)?;
@@ -95,8 +97,12 @@ fn sync_checkmarks(app: &AppHandle, locale: &str) -> Result<(), String> {
         (ITEM_ENGLISH, locale == ENGLISH),
         (ITEM_SIMPLIFIED_CHINESE, locale == SIMPLIFIED_CHINESE),
     ] {
-        if let Some(item) = menu.get(id).and_then(|item| item.as_check_menuitem().cloned()) {
-            item.set_checked(checked).map_err(|error| error.to_string())?;
+        if let Some(item) = menu
+            .get(id)
+            .and_then(|item| item.as_check_menuitem().cloned())
+        {
+            item.set_checked(checked)
+                .map_err(|error| error.to_string())?;
         }
     }
     Ok(())
