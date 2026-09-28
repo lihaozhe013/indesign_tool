@@ -66,6 +66,10 @@ export function readPreview(path: string): Promise<string> {
   return invoke("read_preview", { path });
 }
 
+export function readMarkdownImage(articlePath: string, source: string): Promise<string> {
+  return invoke("read_markdown_image", { articlePath, source });
+}
+
 export function openOutput(path: string): Promise<void> {
   return invoke("open_output", { path });
 }

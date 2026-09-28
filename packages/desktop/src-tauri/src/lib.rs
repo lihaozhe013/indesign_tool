@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
@@ -248,6 +249,48 @@ fn check_assets(article_path: String, sources: Vec<String>) -> Result<AssetCheck
         resolved,
         diagnostics,
     })
+}
+
+#[tauri::command]
+fn read_markdown_image(article_path: String, source: String) -> Result<String, String> {
+    const MAX_IMAGE_BYTES: u64 = 12 * 1024 * 1024;
+    if has_url_scheme(&source) || Path::new(&source).is_absolute() {
+        return Err("Only local relative image paths are supported.".into());
+    }
+    let article_path = PathBuf::from(article_path);
+    let article_directory = article_path
+        .parent()
+        .ok_or_else(|| "The Markdown article path is invalid.".to_string())?;
+    let article_directory = std::fs::canonicalize(article_directory).map_err(|error| error.to_string())?;
+    let image_path = std::fs::canonicalize(article_directory.join(&source)).map_err(|error| error.to_string())?;
+    if !image_path.is_file() {
+        return Err("The image file was not found.".into());
+    }
+    let extension = image_path
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    let mime = match extension.as_str() {
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        _ => return Err("The image format is not supported in the preview.".into()),
+    };
+    let mut bytes = Vec::new();
+    std::fs::File::open(image_path)
+        .map_err(|error| error.to_string())?
+        .take(MAX_IMAGE_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|error| error.to_string())?;
+    if bytes.len() as u64 > MAX_IMAGE_BYTES {
+        return Err("The image exceeds the 12 MB preview limit.".into());
+    }
+    Ok(format!(
+        "data:{mime};base64,{}",
+        base64::engine::general_purpose::STANDARD.encode(bytes)
+    ))
 }
 
 #[tauri::command]
@@ -542,6 +585,7 @@ pub fn run() {
             check_host,
             run_host_job,
             read_preview,
+            read_markdown_image,
             open_output,
             check_assets,
             prepare_output_stage,

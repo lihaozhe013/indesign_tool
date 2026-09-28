@@ -33,6 +33,7 @@ import {
   setStoredLocale
 } from "./bridge.js";
 import type { HostAvailability, OutputPaths, OutputStage } from "./bridge.js";
+import { MarkdownArticlePreview } from "./MarkdownArticlePreview.js";
 
 const starterArticle = `---
 title: A field guide to better pages
@@ -88,6 +89,7 @@ export function App() {
   const [output, setOutput] = useState<OutputPaths | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [previewIndex, setPreviewIndex] = useState(1);
+  const [editorMode, setEditorMode] = useState<"preview" | "source">("preview");
 
   const locale = (i18n.resolvedLanguage ?? i18n.language) as Locale;
 
@@ -503,16 +505,32 @@ export function App() {
                 <div className="panel-title-group"><span className="step-number">01</span><div><h2>{t("app.editor.title")}</h2><p>{t("app.editor.hint")}</p></div></div>
                 <div className={`file-state ${dirty ? "changed" : "saved"}`}><span className="file-state-dot" />{dirty ? t("app.editor.stateChanged") : articlePath ? t("app.editor.stateSaved") : t("app.editor.stateNew")}</div>
               </div>
-              <div className="editor-toolbar"><span className="markdown-chip">M↓</span><span>{t("app.editor.format")}</span><span className="toolbar-divider" /><span className="editor-file-name">{articlePath ? fileName(articlePath) : "untitled-article.md"}</span><span className="editor-toolbar-spacer" /><span className="line-count">{t("app.editor.lineCount", { count: markdown.split("\n").length })}</span></div>
-              <textarea
-                className="markdown-editor"
-                aria-label={t("app.editor.ariaLabel")}
-                value={markdown}
-                spellCheck={false}
-                onChange={(event) => setMarkdown(event.target.value)}
-                disabled={busy}
-              />
-              <div className="editor-footer"><span><span className="footer-dot" /> {t("app.editor.sourceLabel")}</span><span>{parsed.document ? t("app.editor.blockCount", { count: parsed.document.blocks.length }) : t("app.editor.blocked")}</span></div>
+              <div className="editor-toolbar">
+                <span className="markdown-chip">M↓</span><span>{t("app.editor.format")}</span><span className="toolbar-divider" />
+                <span className="editor-file-name">{articlePath ? fileName(articlePath) : "untitled-article.md"}</span>
+                <span className="editor-toolbar-spacer" />
+                <span className="line-count">{t("app.editor.lineCount", { count: markdown.split("\n").length })}</span>
+                <div className="editor-mode-switch" role="group" aria-label={t("app.editor.modeLabel")}>
+                  <button type="button" aria-pressed={editorMode === "preview"} className={editorMode === "preview" ? "active" : ""} onClick={() => setEditorMode("preview")} disabled={busy}>{t("app.editor.previewMode")}</button>
+                  <button type="button" aria-pressed={editorMode === "source"} className={editorMode === "source" ? "active" : ""} onClick={() => setEditorMode("source")} disabled={busy}>{t("app.editor.sourceMode")}</button>
+                </div>
+              </div>
+              {editorMode === "source"
+                ? <textarea
+                    className="markdown-editor"
+                    aria-label={t("app.editor.ariaLabel")}
+                    value={markdown}
+                    spellCheck={false}
+                    onChange={(event) => setMarkdown(event.target.value)}
+                    disabled={busy}
+                  />
+                : <MarkdownArticlePreview
+                    markdown={markdown}
+                    articlePath={articlePath}
+                    title={title}
+                    subtitle={parsed.document?.metadata.subtitle}
+                  />}
+              <div className="editor-footer"><span><span className="footer-dot" /> {editorMode === "source" ? t("app.editor.sourceLabel") : t("app.editor.renderedLabel")}</span><span>{parsed.document ? t("app.editor.blockCount", { count: parsed.document.blocks.length }) : t("app.editor.blocked")}</span></div>
             </section>
 
             <div className="workflow-side">
