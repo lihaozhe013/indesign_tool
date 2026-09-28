@@ -44,7 +44,7 @@ describe("verifyDocumentDump", () => {
     expect(verifyDocumentDump(dumpFor(article), article)).toEqual([]);
   });
 
-  it("rejects lost text, residual overflow, and missing assets while retaining font warnings", () => {
+  it("reports lost text, residual overflow, and missing assets as warnings", () => {
     const dump = dumpFor(article);
     dump.stories[0]!.overset = true;
     dump.stories[0]!.paragraphs[0]!.text = "Truncated body";
@@ -52,9 +52,9 @@ describe("verifyDocumentDump", () => {
     dump.missingFonts = ["Example Sans"];
 
     expect(verifyDocumentDump(dump, article).map((item) => [item.code, item.severity])).toEqual([
-      ["Story.UnexpectedOverset", "error"],
-      ["Document.TextChanged", "error"],
-      ["Asset.Missing", "error"],
+      ["Story.UnexpectedOverset", "warning"],
+      ["Document.TextChanged", "warning"],
+      ["Asset.Missing", "warning"],
       ["Font.Missing", "warning"]
     ]);
   });
@@ -64,5 +64,20 @@ describe("verifyDocumentDump", () => {
     dump.frames = dump.frames.filter((frame) => frame.semanticRole !== "hero-subtitle");
 
     expect(verifyDocumentDump(dump, article).map((item) => item.code)).toContain("Document.CoverSubtitleChanged");
+  });
+
+  it("finds and checks an unlabeled article story through its article flow frame", () => {
+    const dump = dumpFor(article);
+    dump.stories[0]!.paragraphs = dump.stories[0]!.paragraphs.map(({ semanticId: _semanticId, ...paragraph }) => paragraph);
+    dump.stories.unshift({ id: "master-story", overset: false, paragraphs: [] });
+    dump.frames.push(
+      { semanticRole: "article-flow", storyId: "master-story" },
+      { semanticRole: "article-flow", storyId: dump.stories[1]!.id, pageIndex: 1 }
+    );
+
+    expect(verifyDocumentDump(dump, article)).toEqual([]);
+
+    dump.stories[1]!.paragraphs[0]!.text = "Changed text";
+    expect(verifyDocumentDump(dump, article).map((item) => item.code)).toContain("Document.TextChanged");
   });
 });

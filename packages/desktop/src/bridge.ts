@@ -31,8 +31,11 @@ export interface OutputStage {
 
 export interface OutputPaths {
   documentPath: string;
-  pdfPath: string;
-  previewDirectory: string;
+  pdfPath: string | null;
+  previewDirectory: string | null;
+  previewPages: number[];
+  reportPath: string;
+  finalizationWarnings: string[];
 }
 
 export function openMarkdown(): Promise<OpenedTextFile | null> {
@@ -75,8 +78,8 @@ export function prepareOutputStage(outputPath: string): Promise<OutputStage> {
   return invoke("prepare_output_stage", { outputPath });
 }
 
-export function finalizeOutputStage(outputPath: string, stageId: string, expectedPages: number): Promise<OutputPaths> {
-  return invoke("finalize_output_stage", { outputPath, stageId, expectedPages });
+export function finalizeOutputStage(outputPath: string, stageId: string, report: string, expectedPages: number): Promise<OutputPaths> {
+  return invoke("finalize_output_stage", { outputPath, stageId, report, expectedPages });
 }
 
 export function discardOutputStage(outputPath: string, stageId: string): Promise<void> {

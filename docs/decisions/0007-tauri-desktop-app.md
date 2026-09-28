@@ -22,7 +22,7 @@ The desktop app can provide a larger editing and preview workspace without requi
 
 - The first release supports local macOS use with InDesign 2026.
 - The app bundle declares `NSAppleEventsUsageDescription` and an Apple Events entitlement.
-- Templates must already have `com.publisher.role` labels; role mapping UI is deferred.
+- Template labels are optional compatibility signals; automatic resolution and its fallback policy are defined in [ADR 0009](0009-tolerant-template-resolution.md).
 - The older plugin source is not built or exposed as a product entry point.
 - Signed and notarized distribution, Windows support, and InDesign Server are deferred.
 

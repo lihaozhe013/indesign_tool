@@ -226,7 +226,7 @@ fn check_assets(article_path: String, sources: Vec<String>) -> Result<AssetCheck
             diagnostics.push(Diagnostic {
                 code: "Asset.UnsupportedScheme".into(),
                 message: format!("Only local relative image assets are supported: {source}"),
-                severity: "error",
+                severity: "warning",
                 path: Some(source.clone()),
             });
             continue;
@@ -239,7 +239,7 @@ fn check_assets(article_path: String, sources: Vec<String>) -> Result<AssetCheck
             _ => diagnostics.push(Diagnostic {
                 code: "Asset.Missing".into(),
                 message: format!("Image asset was not found: {source}"),
-                severity: "error",
+                severity: "warning",
                 path: Some(source),
             }),
         }
@@ -268,7 +268,8 @@ fn prepare_output_stage(output_path: String) -> Result<OutputStage, String> {
         .ok_or_else(|| "The output document name is invalid.".to_string())?;
     let final_pdf = parent.join(format!("{stem}.pdf"));
     let final_preview = parent.join(format!("{stem}-preview"));
-    for path in [&final_document, &final_pdf, &final_preview] {
+    let final_report = parent.join(format!("{stem}-report.txt"));
+    for path in [&final_document, &final_pdf, &final_preview, &final_report] {
         if path.exists() {
             return Err(format!("Output already exists: {}", path.display()));
         }
@@ -299,8 +300,12 @@ fn prepare_output_stage(output_path: String) -> Result<OutputStage, String> {
 fn finalize_output_stage(
     output_path: String,
     stage_id: String,
+    report: String,
     expected_pages: u32,
 ) -> Result<OutputPaths, String> {
+    if report.trim().is_empty() {
+        return Err("The Chinese report is empty.".into());
+    }
     let final_document = PathBuf::from(output_path);
     ensure_extension(&final_document, &["indd"])?;
     let parent = final_document
@@ -317,68 +322,106 @@ fn finalize_output_stage(
     let stage_preview = stage_dir.join("preview");
     let final_pdf = parent.join(format!("{stem}.pdf"));
     let final_preview = parent.join(format!("{stem}-preview"));
+    let final_report = parent.join(format!("{stem}-report.txt"));
+    let stage_report = stage_dir.join("report.txt");
 
     require_nonempty_file(&stage_document, "InDesign document")?;
-    require_nonempty_file(&stage_pdf, "PDF")?;
-    if !stage_preview.is_dir() {
-        return Err("The page preview folder is missing.".into());
+    let pdf_available = stage_pdf.is_file()
+        && std::fs::metadata(&stage_pdf).map(|meta| meta.len() > 0).unwrap_or(false);
+    let mut preview_pages = Vec::new();
+    let mut finalization_warnings = Vec::new();
+    if !pdf_available {
+        finalization_warnings.push("PDF 未生成或为空文件，INDD 已保留。".to_string());
     }
-    let preview_count = std::fs::read_dir(&stage_preview)
-        .map_err(|error| error.to_string())?
-        .filter_map(Result::ok)
-        .filter(|entry| {
-            entry
-                .path()
-                .extension()
-                .and_then(|ext| ext.to_str())
-                .map(|ext| ext.eq_ignore_ascii_case("png"))
-                .unwrap_or(false)
-        })
-        .count();
-    if preview_count != expected_pages as usize {
-        return Err(format!(
-            "Expected {expected_pages} page previews but found {preview_count}."
-        ));
+    if stage_preview.is_dir() {
+        match std::fs::read_dir(&stage_preview) {
+            Ok(entries) => for entry in entries.filter_map(Result::ok) {
+                let path = entry.path();
+                let name = path.file_name().and_then(|value| value.to_str()).unwrap_or("");
+                let page = name.strip_prefix("page-").and_then(|value| value.strip_suffix(".png"))
+                    .and_then(|value| value.parse::<u32>().ok());
+                if let Some(page) = page {
+                    if path.is_file() && std::fs::metadata(&path).map(|meta| meta.len() > 0).unwrap_or(false) {
+                        preview_pages.push(page);
+                    } else {
+                        let _ = std::fs::remove_file(&path);
+                    }
+                }
+            },
+            Err(error) => finalization_warnings.push(format!("无法检查页面预览目录：{error}")),
+        }
     }
-    for page in 1..=expected_pages {
-        let preview = stage_preview.join(format!("page-{page:03}.png"));
-        require_nonempty_file(&preview, "Page preview")?;
+    preview_pages.sort_unstable();
+    preview_pages.dedup();
+    if preview_pages.len() < expected_pages as usize {
+        finalization_warnings.push(format!("页面预览仅成功生成 {} / {} 页。", preview_pages.len(), expected_pages));
     }
-    for path in [&final_document, &final_pdf, &final_preview] {
+    for path in [&final_document, &final_report] {
         if path.exists() {
             return Err(format!("Output already exists: {}", path.display()));
         }
     }
-
-    let mut moved_document = false;
-    let mut moved_pdf = false;
-    let mut moved_preview = false;
-    let move_result = (|| {
-        std::fs::rename(&stage_document, &final_document)?;
-        moved_document = true;
-        std::fs::rename(&stage_pdf, &final_pdf)?;
-        moved_pdf = true;
-        std::fs::rename(&stage_preview, &final_preview)?;
-        moved_preview = true;
-        Ok::<(), std::io::Error>(())
-    })();
-    if let Err(error) = move_result {
-        if moved_document {
-            let _ = std::fs::remove_file(&final_document);
+    if pdf_available && final_pdf.exists() {
+        return Err(format!("Output already exists: {}", final_pdf.display()));
+    }
+    if !preview_pages.is_empty() && final_preview.exists() {
+        return Err(format!("Output already exists: {}", final_preview.display()));
+    }
+    std::fs::rename(&stage_document, &final_document)
+        .map_err(|error| format!("Could not finalize generated InDesign document: {error}"))?;
+    let pdf_moved = if pdf_available {
+        match std::fs::rename(&stage_pdf, &final_pdf) {
+            Ok(()) => true,
+            Err(error) => {
+                finalization_warnings.push(format!("PDF 文件整理失败：{error}"));
+                false
+            }
         }
-        if moved_pdf {
-            let _ = std::fs::remove_file(&final_pdf);
+    } else { false };
+    let preview_moved = if !preview_pages.is_empty() {
+        match std::fs::rename(&stage_preview, &final_preview) {
+            Ok(()) => true,
+            Err(error) => {
+                finalization_warnings.push(format!("页面预览整理失败：{error}"));
+                preview_pages.clear();
+                false
+            }
         }
-        if moved_preview {
-            let _ = std::fs::remove_dir_all(&final_preview);
-        }
-        return Err(format!("Could not finalize generated files: {error}"));
+    } else { false };
+    let mut report = report;
+    if !finalization_warnings.is_empty() {
+        report.push_str("\n\n成果整理提示：\n");
+        for warning in &finalization_warnings { report.push_str(&format!("- {warning}\n")); }
+    }
+    report.push_str("\n最终文件清单：\n");
+    report.push_str(&format!("- INDD：{}\n", final_document.display()));
+    if pdf_moved {
+        report.push_str(&format!("- PDF：{}\n", final_pdf.display()));
+    } else {
+        report.push_str("- PDF：未生成\n");
+    }
+    if preview_moved {
+        report.push_str(&format!("- 页面预览目录：{}\n- 成功页面：{}\n", final_preview.display(), preview_pages.iter().map(u32::to_string).collect::<Vec<_>>().join("、")));
+    } else {
+        report.push_str("- 页面预览：未生成\n");
+    }
+    report.push_str(&format!("- 检查报告：{}\n", final_report.display()));
+    let report_result = std::fs::write(&stage_report, report.as_bytes())
+        .and_then(|_| std::fs::rename(&stage_report, &final_report));
+    if let Err(error) = report_result {
+        let _ = std::fs::remove_file(&final_document);
+        if pdf_moved { let _ = std::fs::remove_file(&final_pdf); }
+        if preview_moved { let _ = std::fs::remove_dir_all(&final_preview); }
+        return Err(format!("Could not finalize the required Chinese report: {error}"));
     }
     let _ = std::fs::remove_dir_all(&stage_dir);
     Ok(OutputPaths {
         document_path: final_document.to_string_lossy().into_owned(),
-        pdf_path: final_pdf.to_string_lossy().into_owned(),
-        preview_directory: final_preview.to_string_lossy().into_owned(),
+        pdf_path: pdf_moved.then(|| final_pdf.to_string_lossy().into_owned()),
+        preview_directory: preview_moved.then(|| final_preview.to_string_lossy().into_owned()),
+        preview_pages,
+        report_path: final_report.to_string_lossy().into_owned(),
+        finalization_warnings,
     })
 }
 
@@ -386,8 +429,11 @@ fn finalize_output_stage(
 #[serde(rename_all = "camelCase")]
 struct OutputPaths {
     document_path: String,
-    pdf_path: String,
-    preview_directory: String,
+    pdf_path: Option<String>,
+    preview_directory: Option<String>,
+    preview_pages: Vec<u32>,
+    report_path: String,
+    finalization_warnings: Vec<String>,
 }
 
 #[tauri::command]
@@ -552,7 +598,22 @@ mod tests {
     }
 
     #[test]
-    fn finalizes_only_a_complete_staged_output_set() {
+    fn reports_missing_and_unsupported_images_as_warnings() {
+        let root = std::env::temp_dir().join(format!("folio-assets-test-{}", Uuid::new_v4()));
+        fs::create_dir_all(&root).unwrap();
+        let article = root.join("article.md");
+        fs::write(&article, "article").unwrap();
+        let result = super::check_assets(
+            article.to_string_lossy().into_owned(),
+            vec!["missing.png".into(), "https://example.test/image.png".into()],
+        ).unwrap();
+        assert!(result.resolved.is_empty());
+        assert_eq!(result.diagnostics.iter().map(|item| item.severity).collect::<Vec<_>>(), vec!["warning", "warning"]);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn finalizes_a_complete_output_set() {
         let root = std::env::temp_dir().join(format!("folio-stage-test-{}", Uuid::new_v4()));
         fs::create_dir_all(&root).unwrap();
         let output = root.join("article.indd");
@@ -570,16 +631,37 @@ mod tests {
         )
         .unwrap();
 
-        let files = finalize_output_stage(output.to_string_lossy().into_owned(), stage.stage_id, 2)
+        let files = finalize_output_stage(output.to_string_lossy().into_owned(), stage.stage_id, "报告".into(), 2)
             .unwrap();
         assert!(PathBuf::from(files.document_path).is_file());
-        assert!(PathBuf::from(files.pdf_path).is_file());
-        assert_eq!(fs::read_dir(files.preview_directory).unwrap().count(), 2);
+        assert!(PathBuf::from(files.pdf_path.unwrap()).is_file());
+        assert_eq!(files.preview_pages, vec![1, 2]);
+        assert_eq!(fs::read_dir(files.preview_directory.unwrap()).unwrap().count(), 2);
+        assert!(PathBuf::from(files.report_path).is_file());
+        assert!(files.finalization_warnings.is_empty());
         fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
-    fn rejects_an_incomplete_staged_preview_set_without_publishing_files() {
+    fn preserves_document_and_report_without_optional_exports() {
+        let root = std::env::temp_dir().join(format!("folio-stage-test-{}", Uuid::new_v4()));
+        fs::create_dir_all(&root).unwrap();
+        let output = root.join("article.indd");
+        let stage = prepare_output_stage(output.to_string_lossy().into_owned()).unwrap();
+        fs::write(&stage.document_path, b"indesign-document").unwrap();
+        let files = finalize_output_stage(output.to_string_lossy().into_owned(), stage.stage_id, "仅 INDD".into(), 2).unwrap();
+        assert!(output.is_file());
+        assert!(files.pdf_path.is_none());
+        assert!(files.preview_directory.is_none());
+        assert!(files.preview_pages.is_empty());
+        assert!(PathBuf::from(files.report_path).is_file());
+        assert_eq!(files.finalization_warnings.len(), 2);
+        assert!(!root.join("article.pdf").exists());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn preserves_pdf_and_only_nonempty_preview_pages() {
         let root = std::env::temp_dir().join(format!("folio-stage-test-{}", Uuid::new_v4()));
         fs::create_dir_all(&root).unwrap();
         let output = root.join("article.indd");
@@ -591,34 +673,27 @@ mod tests {
             b"preview-one",
         )
         .unwrap();
+        fs::write(PathBuf::from(&stage.preview_directory).join("page-002.png"), b"").unwrap();
 
-        let error = finalize_output_stage(output.to_string_lossy().into_owned(), stage.stage_id, 2)
-            .unwrap_err();
-        assert!(error.contains("Expected 2 page previews"));
-        assert!(!output.exists());
-        assert!(!root.join("article.pdf").exists());
+        let files = finalize_output_stage(output.to_string_lossy().into_owned(), stage.stage_id, "部分预览".into(), 2).unwrap();
+        assert!(output.is_file());
+        assert!(files.pdf_path.unwrap().ends_with("article.pdf"));
+        assert_eq!(files.preview_pages, vec![1]);
+        assert!(PathBuf::from(files.preview_directory.unwrap()).join("page-001.png").is_file());
+        assert_eq!(files.finalization_warnings.len(), 1);
         fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
-    fn rejects_an_empty_page_preview_without_publishing_files() {
+    fn does_not_publish_an_empty_indesign_document() {
         let root = std::env::temp_dir().join(format!("folio-stage-test-{}", Uuid::new_v4()));
         fs::create_dir_all(&root).unwrap();
         let output = root.join("article.indd");
         let stage = prepare_output_stage(output.to_string_lossy().into_owned()).unwrap();
-        fs::write(&stage.document_path, b"indesign-document").unwrap();
-        fs::write(&stage.pdf_path, b"pdf-document").unwrap();
-        fs::write(
-            PathBuf::from(&stage.preview_directory).join("page-001.png"),
-            b"",
-        )
-        .unwrap();
-
-        let error = finalize_output_stage(output.to_string_lossy().into_owned(), stage.stage_id, 1)
-            .unwrap_err();
-        assert!(error.contains("Page preview is empty or invalid"));
+        fs::write(&stage.document_path, b"").unwrap();
+        let error = finalize_output_stage(output.to_string_lossy().into_owned(), stage.stage_id, "报告".into(), 1).unwrap_err();
+        assert!(error.contains("InDesign document is empty"));
         assert!(!output.exists());
-        assert!(!root.join("article.pdf").exists());
         fs::remove_dir_all(root).unwrap();
     }
 }

@@ -13,7 +13,8 @@ import type {
 } from "@folio/contracts";
 import { createIndesignAdapter, planHostOperations } from "@folio/indesign";
 import { parseArticle, publishDocument } from "@folio/core";
-import { compileTemplate, createTemplateInventory, deriveRoleAssignments } from "@folio/template";
+import { compileTemplate, createTemplateInventory, resolveTemplateRoles } from "@folio/template";
+import type { RoleResolution } from "@folio/template";
 import { applyDocumentLocale, supportedLocales, type Locale } from "./i18n/index.js";
 import { verifyDocumentDump } from "./publication-verification.js";
 import {
@@ -60,6 +61,7 @@ type TemplateState = {
   inventory: TemplateInventory;
   compiled: CompiledTemplate;
   diagnostics: Diagnostic[];
+  resolutions: RoleResolution[];
 };
 
 type Notice = { kind: "success" | "error" | "info"; text: string };
@@ -86,15 +88,16 @@ export function App() {
   const [output, setOutput] = useState<OutputPaths | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [previewIndex, setPreviewIndex] = useState(1);
-  const [outputPageCount, setOutputPageCount] = useState(0);
 
   const locale = (i18n.resolvedLanguage ?? i18n.language) as Locale;
 
-  const parsed = useMemo(() => parseArticle(markdown, { sourceId: articlePath ?? "desktop-draft" }), [markdown, articlePath]);
+  const parsed = useMemo(() => parseArticle(markdown, {
+    sourceId: articlePath ?? "desktop-draft",
+    fallbackTitle: t("app.article.untitled")
+  }), [markdown, articlePath, t]);
   const dirty = savedMarkdown !== null ? markdown !== savedMarkdown : Boolean(articlePath);
   const title = parsed.document?.metadata.title ?? t("app.article.untitled");
-  const missingSubtitleFrame = Boolean(parsed.document?.metadata.subtitle && template && !template.compiled.frameRoles["hero-subtitle"]);
-  const templateReady = Boolean(template && !missingSubtitleFrame && !template.diagnostics.some((item) => item.severity === "error"));
+  const templateReady = Boolean(template);
 
   useEffect(() => {
     document.title = t("app.title");
@@ -121,16 +124,8 @@ export function App() {
   }, [refreshHost]);
 
   useEffect(() => {
-    // Diagnostic text stays English: it originates in the contract-owned core and template
-    // packages and is persisted in host job results, so it is not part of the UI catalog.
-    const subtitleDiagnostics: Diagnostic[] = missingSubtitleFrame ? [{
-      code: "Template.CoverSubtitleFrameMissing",
-      message: "Add a text frame labeled with role hero-subtitle to the Cover page, or remove the article subtitle.",
-      severity: "error",
-      path: "frameRoles.hero-subtitle"
-    }] : [];
-    setDiagnostics(deduplicateDiagnostics([...parsed.diagnostics, ...(template?.diagnostics ?? []), ...subtitleDiagnostics]));
-  }, [missingSubtitleFrame, parsed, template]);
+    setDiagnostics(deduplicateDiagnostics([...parsed.diagnostics, ...(template?.diagnostics ?? [])]));
+  }, [parsed, template]);
 
   const handleOpenMarkdown = useCallback(async () => {
     try {
@@ -171,32 +166,20 @@ export function App() {
       const scan = result.scan as TemplateScan | undefined;
       if (!scan) throw new Error(t("app.error.noTemplateScan"));
       const name = fileStem(path);
-      const assignments = deriveRoleAssignments(scan, { templateId: templateId(path), name });
+      const assignments = resolveTemplateRoles(scan, { templateId: templateId(path), name });
       const inventoryResult = assignments.assignments
         ? createTemplateInventory(scan, assignments.assignments)
         : { diagnostics: assignments.diagnostics, inventory: undefined };
       const compilation = inventoryResult.inventory ? compileTemplate(inventoryResult.inventory) : { diagnostics: [] as Diagnostic[], template: undefined };
       const resultDiagnostics = [...assignments.diagnostics, ...inventoryResult.diagnostics, ...compilation.diagnostics];
-      if (compilation.template && !compilation.template.frameRoles["hero-title"]) {
-        resultDiagnostics.push({
-          code: "Template.CoverTitleFrameMissing",
-          message: "Add a text frame labeled with role hero-title to the Cover page.",
-          severity: "error",
-          path: "frameRoles.hero-title"
-        });
-      }
       if (!inventoryResult.inventory || !compilation.template) {
         setDiagnostics(deduplicateDiagnostics(resultDiagnostics));
         setNotice({ kind: "error", text: t("app.notice.templateUnusable") });
         return;
       }
-      setTemplate({ scan, inventory: inventoryResult.inventory, compiled: compilation.template, diagnostics: deduplicateDiagnostics(resultDiagnostics) });
+      setTemplate({ scan, inventory: inventoryResult.inventory, compiled: compilation.template, diagnostics: deduplicateDiagnostics(resultDiagnostics), resolutions: assignments.resolutions });
       setDiagnostics(deduplicateDiagnostics(resultDiagnostics));
-      if (resultDiagnostics.some((item) => item.severity === "error")) {
-        setNotice({ kind: "error", text: t("app.notice.templateIssues") });
-      } else {
-        setNotice({ kind: "success", text: t("app.notice.templateReady", { name: inventoryResult.inventory.name }) });
-      }
+      setNotice({ kind: "success", text: t("app.notice.templateReady", { name: inventoryResult.inventory.name }) });
     } catch (error) {
       const message = errorMessage(error);
       setDiagnostics([{ code: "Template.InspectionFailed", message, severity: "error" }]);
@@ -234,7 +217,7 @@ export function App() {
     setDiagnostics(initialDiagnostics);
     setOutput(null);
     setPreview(null);
-    if (!parsed.document || initialDiagnostics.some((item) => item.severity === "error")) {
+    if (!parsed.document) {
       setNotice({ kind: "error", text: t("app.notice.fixMarkdown") });
       return;
     }
@@ -258,14 +241,15 @@ export function App() {
       setSavedMarkdown(markdown);
 
       const localSources = parsed.document.blocks.filter((block) => block.type === "image").map((block) => block.src);
-      const assetResult = await checkAssets(savedPath, localSources);
+      let assetResult: Awaited<ReturnType<typeof checkAssets>> = { resolved: {}, diagnostics: [] };
+      try {
+        assetResult = await checkAssets(savedPath, localSources);
+      } catch (error) {
+        assetResult.diagnostics.push({ code: "Asset.ScanFailed", message: errorMessage(error), severity: "warning" });
+      }
       const resolvedDocument = resolveArticleAssets(parsed.document, assetResult.resolved);
       const readyDiagnostics = deduplicateDiagnostics([...initialDiagnostics, ...assetResult.diagnostics]);
       setDiagnostics(readyDiagnostics);
-      if (readyDiagnostics.some((item) => item.severity === "error")) {
-        setNotice({ kind: "error", text: t("app.notice.fixImages") });
-        return;
-      }
 
       if (!finalOutputPath) {
         finalOutputPath = await chooseOutput();
@@ -276,6 +260,7 @@ export function App() {
       setProgress({ key: "app.progress.buildDocument" });
 
       let renderCount = 0;
+      const hostPlanDiagnostics: Diagnostic[] = [];
       const adapter = createIndesignAdapter({
         inspectTemplate: async () => template.inventory,
         render: async (input) => {
@@ -284,7 +269,8 @@ export function App() {
             ? { key: "app.progress.compose" }
             : { key: "app.progress.reflow", params: { count: renderCount } });
           const hostPlan = planHostOperations(input.document, input.template, input.ir);
-          if (!hostPlan.plan || hostPlan.diagnostics.some((item) => item.severity === "error")) {
+          hostPlanDiagnostics.push(...hostPlan.diagnostics.map((item) => ({ ...item, severity: "warning" as const })));
+          if (!hostPlan.plan) {
             throw new Error(hostPlan.diagnostics.map((item) => item.message).join("\n") || t("app.error.noLayoutPlan"));
           }
           const result = await invokeHost("render", {
@@ -323,44 +309,91 @@ export function App() {
         document: resolvedDocument,
         template: template.compiled
       });
-      const publishDiagnostics = published.diagnostics;
-      if (!published.complete || !published.ir) {
-        setDiagnostics(deduplicateDiagnostics([...readyDiagnostics, ...publishDiagnostics]));
-        setNotice({ kind: "error", text: t("app.notice.layoutIncomplete") });
-        return;
-      }
+      const publishDiagnostics = published.diagnostics.map((item) => item.severity === "error" ? { ...item, severity: "warning" as const } : item);
+      if (!published.ir) throw new Error(t("app.notice.layoutIncomplete"));
 
       setProgress({ key: "app.progress.verify" });
-      const dump = await adapter.dump(stage.documentPath);
-      const verification = verifyDocumentDump(dump, resolvedDocument);
-      if (verification.some((item) => item.severity === "error")) {
-        setDiagnostics(deduplicateDiagnostics([...readyDiagnostics, ...publishDiagnostics, ...verification]));
-        setNotice({ kind: "error", text: t("app.notice.verificationFailed") });
-        return;
+      let pageCount = published.observation?.pageCount || published.ir.pages.length;
+      let verification: Diagnostic[] = [];
+      try {
+        const dump = await adapter.dump(stage.documentPath);
+        verification = verifyDocumentDump(dump, resolvedDocument).map((item) => item.severity === "error" ? { ...item, severity: "warning" as const } : item);
+        if (dump.pages.length) pageCount = dump.pages.length;
+      } catch (error) {
+        verification.push({ code: "DocumentDump.Unavailable", message: errorMessage(error), severity: "warning" });
       }
-      const pageCount = dump.pages.length;
-      if (!pageCount) throw new Error(t("app.error.noPages"));
+      if (!pageCount) {
+        pageCount = published.ir.pages.length;
+        verification.push({ code: "Document.PagesUnverified", message: "InDesign did not return a reliable page count; the planned page count is shown.", severity: "warning" });
+      }
 
+      const outputDiagnostics: Diagnostic[] = [];
+      let pdfCreated = false;
       setProgress({ key: "app.progress.exportPdf" });
-      await invokeHost("export", { documentPath: stage.documentPath, outputPath: stage.pdfPath, format: "pdf" }, t);
+      try {
+        await invokeHost("export", { documentPath: stage.documentPath, outputPath: stage.pdfPath, format: "pdf" }, t);
+        pdfCreated = true;
+      } catch (error) {
+        outputDiagnostics.push({ code: "Publish.PdfExportFailed", message: errorMessage(error), severity: "warning" });
+      }
+      const attemptedPreviews: number[] = [];
       for (let page = 1; page <= pageCount; page += 1) {
         setProgress({ key: "app.progress.previews", params: { page, total: pageCount } });
         const previewPath = joinPath(stage.previewDirectory, `page-${String(page).padStart(3, "0")}.png`);
-        await invokeHost("export", { documentPath: stage.documentPath, outputPath: previewPath, format: "png", pageNumber: page }, t);
+        try {
+          await invokeHost("export", { documentPath: stage.documentPath, outputPath: previewPath, format: "png", pageNumber: page }, t);
+          attemptedPreviews.push(page);
+        } catch (error) {
+          outputDiagnostics.push({ code: "Publish.PreviewExportFailed", message: errorMessage(error), severity: "warning", path: `pages.${page}` });
+        }
       }
 
       setProgress({ key: "app.progress.finalize" });
-      const finalFiles = await finalizeOutputStage(finalOutputPath, stage.stageId, pageCount);
+      const finalDiagnostics = deduplicateDiagnostics([...readyDiagnostics, ...hostPlanDiagnostics, ...publishDiagnostics, ...verification, ...outputDiagnostics]);
+      const report = buildChineseReport(i18n.getFixedT("zh-Hans"), title, template.resolutions, finalDiagnostics, { pdfCreated, previewPages: attemptedPreviews });
+      const finalFiles = await finalizeOutputStage(finalOutputPath, stage.stageId, report, pageCount);
       stage = null;
       setOutput(finalFiles);
-      setOutputPageCount(pageCount);
-      setPreviewIndex(1);
-      setPreview(await readPreview(joinPath(finalFiles.previewDirectory, "page-001.png")));
-      setDiagnostics(deduplicateDiagnostics([...readyDiagnostics, ...publishDiagnostics, ...verification]));
-      setNotice({ kind: "success", text: t("app.notice.published", { file: fileName(finalFiles.documentPath), count: pageCount }) });
+      const allDiagnostics = deduplicateDiagnostics([...finalDiagnostics, ...(finalFiles.previewPages.length < pageCount ? [{
+        code: "Publish.PreviewPartial",
+        message: "Some page previews could not be generated or were empty.",
+        severity: "warning" as const
+      }] : []), ...finalFiles.finalizationWarnings.map((message) => ({ code: "Publish.OptionalOutputMissing", message, severity: "warning" as const }))]);
+      setDiagnostics(allDiagnostics);
+      const firstPreview = finalFiles.previewPages[0];
+      setPreviewIndex(firstPreview ?? 1);
+      if (firstPreview && finalFiles.previewDirectory) {
+        try { setPreview(await readPreview(joinPath(finalFiles.previewDirectory, `page-${String(firstPreview).padStart(3, "0")}.png`))); }
+        catch (error) { setPreview(null); }
+      }
+      setNotice({
+        kind: allDiagnostics.some((item) => item.severity === "warning") ? "info" : "success",
+        text: allDiagnostics.some((item) => item.severity === "warning")
+          ? t("app.notice.publishedDegraded", { file: fileName(finalFiles.documentPath) })
+          : t("app.notice.published", { file: fileName(finalFiles.documentPath), count: pageCount })
+      });
     } catch (error) {
-      setNotice({ kind: "error", text: errorMessage(error) });
-      setDiagnostics((current) => deduplicateDiagnostics([...current, { code: "Publish.Failed", message: errorMessage(error), severity: "error" }]));
+      const failure = errorMessage(error);
+      if (stage && finalOutputPath) {
+        try {
+          const salvageReport = buildChineseReport(i18n.getFixedT("zh-Hans"), title, template.resolutions, [
+            ...initialDiagnostics,
+            { code: "Publish.RecoveredAfterIssue", message: failure, severity: "warning" }
+          ], { pdfCreated: false, previewPages: [] });
+          const recovered = await finalizeOutputStage(finalOutputPath, stage.stageId, salvageReport, 0);
+          stage = null;
+          setOutput(recovered);
+          setPreview(null);
+          setDiagnostics(deduplicateDiagnostics([...initialDiagnostics, { code: "Publish.RecoveredAfterIssue", message: failure, severity: "warning" }]));
+          setNotice({ kind: "info", text: t("app.notice.publishedDegraded", { file: fileName(recovered.documentPath) }) });
+        } catch (salvageError) {
+          setNotice({ kind: "error", text: failure });
+          setDiagnostics((current) => deduplicateDiagnostics([...current, { code: "Publish.Failed", message: errorMessage(salvageError), severity: "error" }]));
+        }
+      } else {
+        setNotice({ kind: "error", text: failure });
+        setDiagnostics((current) => deduplicateDiagnostics([...current, { code: "Publish.Failed", message: failure, severity: "error" }]));
+      }
     } finally {
       if (stage && finalOutputPath) {
         try {
@@ -376,17 +409,18 @@ export function App() {
       setBusy(false);
       setProgress(null);
     }
-  }, [articlePath, host, markdown, outputPath, parsed, template, templatePath, templateReady, t]);
+  }, [articlePath, host, i18n, markdown, outputPath, parsed, template, templatePath, templateReady, t]);
 
-  const showPreview = useCallback(async (index: number) => {
-    if (!output || index < 1 || index > outputPageCount) return;
-    setPreviewIndex(index);
+  const showPreview = useCallback(async (pageNumber: number) => {
+    if (!output?.previewDirectory || !output.previewPages.includes(pageNumber)) return;
+    setPreviewIndex(pageNumber);
     try {
-      setPreview(await readPreview(joinPath(output.previewDirectory, `page-${String(index).padStart(3, "0")}.png`)));
+      setPreview(await readPreview(joinPath(output.previewDirectory, `page-${String(pageNumber).padStart(3, "0")}.png`)));
     } catch (error) {
-      setNotice({ kind: "error", text: errorMessage(error) });
+      setPreview(null);
+      setNotice({ kind: "info", text: t("app.notice.previewUnavailable") });
     }
-  }, [output, outputPageCount]);
+  }, [output, t]);
 
   const errorCount = diagnostics.filter((item) => item.severity === "error").length;
   const warningCount = diagnostics.filter((item) => item.severity === "warning").length;
@@ -497,7 +531,13 @@ export function App() {
                   </span>
                   <span className="selection-action">{template ? t("app.action.change") : t("app.action.browse")}</span>
                 </button>
-                {template && <div className={`template-result ${templateReady ? "ready" : "needs-attention"}`}><span className="result-icon">{templateReady ? "✓" : "!"}</span><span>{templateReady ? t("app.template.ready", { name: template.compiled.name }) : t("app.template.needsAttention")}</span></div>}
+              {template && <>
+                <div className={`template-result ${templateReady ? "ready" : "needs-attention"}`}><span className="result-icon">{templateReady ? "✓" : "!"}</span><span>{t("app.template.ready", { name: template.compiled.name, count: template.diagnostics.filter((item) => item.severity === "warning").length })}</span></div>
+                <details className="template-role-details">
+                  <summary>{t("app.template.roleSummary", { count: template.resolutions.filter((item) => item.selected).length })}</summary>
+                  <ul>{template.resolutions.filter((item) => item.selected).map((item) => <li key={item.role}><span>{t(`app.template.roles.${item.role}`, { defaultValue: item.role })}</span><strong>{item.selected?.name}</strong><small>{t(`app.template.confidence.${item.confidence}`)} · {item.selected?.score}</small></li>)}</ul>
+                </details>
+              </>}
               </section>
 
               <section className="setup-card panel output-card">
@@ -525,15 +565,24 @@ export function App() {
           <section className="results-grid">
             <div className="diagnostics-panel panel">
               <div className="results-heading"><div><span className="section-overline">{t("app.preflight.overline")}</span><h2>{t("app.preflight.title")}</h2></div><span className={`issue-count ${errorCount > 0 ? "has-errors" : ""}`}>{t("app.preflight.errorCount", { count: errorCount })} · {t("app.preflight.warningCount", { count: warningCount })}</span></div>
-              {diagnostics.length ? <div className="diagnostic-list">{diagnostics.map((item, index) => <DiagnosticRow key={`${item.code}-${item.path ?? index}`} diagnostic={item} />)}</div> : <div className="empty-checks"><span className="checks-mark">✓</span><div><strong>{t("app.preflight.emptyTitle")}</strong><span>{t("app.preflight.emptyHint")}</span></div></div>}
+              {diagnostics.length ? <div className="diagnostic-list">{diagnostics.map((item, index) => <DiagnosticRow key={`${item.code}-${item.path ?? index}`} diagnostic={item} message={translateDiagnostic(t, item)} />)}</div> : <div className="empty-checks"><span className="checks-mark">✓</span><div><strong>{t("app.preflight.emptyTitle")}</strong><span>{t("app.preflight.emptyHint")}</span></div></div>}
             </div>
 
             <div className="preview-panel panel">
               <div className="results-heading preview-heading"><div><span className="section-overline">{t("app.preview.overline")}</span><h2>{output ? t("app.preview.titleReady") : t("app.preview.titleIdle")}</h2></div>{output && <button className="text-button" type="button" onClick={() => void openOutput(output.documentPath)}>{t("app.preview.openIndd")}</button>}</div>
               <div className={`preview-stage ${preview ? "has-preview" : ""}`}>
-                {preview ? <img src={preview} alt={t("app.preview.alt", { page: previewIndex })} /> : <div className="preview-placeholder"><div className="paper-preview"><span /><span /><span /><i /></div><div className="preview-placeholder-copy"><strong>{t("app.preview.emptyTitle")}</strong><span>{t("app.preview.emptyHint")}</span></div></div>}
+                {preview ? <img src={preview} alt={t("app.preview.alt", { page: previewIndex })} /> : <div className="preview-placeholder"><div className="paper-preview"><span /><span /><span /><i /></div><div className="preview-placeholder-copy"><strong>{output ? t("app.preview.unavailableTitle") : t("app.preview.emptyTitle")}</strong><span>{output ? t("app.preview.unavailableHint") : t("app.preview.emptyHint")}</span></div></div>}
               </div>
-              {output ? <div className="preview-controls"><button type="button" aria-label={t("app.preview.previous")} onClick={() => void showPreview(Math.max(1, previewIndex - 1))} disabled={previewIndex <= 1}>‹</button><span>{t("app.preview.position", { current: previewIndex, total: outputPageCount })}</span><button type="button" aria-label={t("app.preview.next")} onClick={() => void showPreview(Math.min(outputPageCount, previewIndex + 1))} disabled={previewIndex >= outputPageCount}>›</button><span className="preview-control-spacer" /><button className="open-pdf-button" type="button" onClick={() => void openOutput(output.pdfPath)}>{t("app.preview.openPdf")}</button></div> : <div className="preview-meta"><span>{t("app.preview.metaComposition")}</span><span>·</span><span>{t("app.preview.metaLive")}</span></div>}
+              {output ? <div className="preview-controls">
+                {output.previewPages.length > 0 ? <>
+                  <button type="button" aria-label={t("app.preview.previous")} onClick={() => { const slot = output.previewPages.indexOf(previewIndex); if (slot > 0) void showPreview(output.previewPages[slot - 1]!); }} disabled={output.previewPages.indexOf(previewIndex) <= 0}>‹</button>
+                  <span>{t("app.preview.position", { current: Math.max(1, output.previewPages.indexOf(previewIndex) + 1), total: output.previewPages.length, page: previewIndex })}</span>
+                  <button type="button" aria-label={t("app.preview.next")} onClick={() => { const slot = output.previewPages.indexOf(previewIndex); if (slot >= 0 && slot < output.previewPages.length - 1) void showPreview(output.previewPages[slot + 1]!); }} disabled={output.previewPages.indexOf(previewIndex) < 0 || output.previewPages.indexOf(previewIndex) >= output.previewPages.length - 1}>›</button>
+                </> : <span>{t("app.preview.noPreviews")}</span>}
+                <span className="preview-control-spacer" />
+                {output.pdfPath && <button className="open-pdf-button" type="button" onClick={() => void openOutput(output.pdfPath!)}>{t("app.preview.openPdf")}</button>}
+                <button className="open-pdf-button" type="button" onClick={() => void openOutput(output.reportPath)}>{t("app.preview.openReport")}</button>
+              </div> : <div className="preview-meta"><span>{t("app.preview.metaComposition")}</span><span>·</span><span>{t("app.preview.metaLive")}</span></div>}
             </div>
           </section>
 
@@ -544,11 +593,121 @@ export function App() {
   );
 }
 
-function DiagnosticRow({ diagnostic }: { diagnostic: Diagnostic }) {
-  return <div className={`diagnostic-row ${diagnostic.severity}`}><span className="diagnostic-marker">{diagnostic.severity === "error" ? "!" : diagnostic.severity === "warning" ? "△" : "i"}</span><div><strong>{diagnostic.message}</strong>{diagnostic.path && <small>{diagnostic.path}</small>}</div><span className="diagnostic-code">{diagnostic.code}</span></div>;
+function DiagnosticRow({ diagnostic, message }: { diagnostic: Diagnostic; message: string }) {
+  return <div className={`diagnostic-row ${diagnostic.severity}`}><span className="diagnostic-marker">{diagnostic.severity === "error" ? "!" : diagnostic.severity === "warning" ? "△" : "i"}</span><div><strong>{message}</strong>{diagnostic.path && <small>{diagnostic.path}</small>}</div><span className="diagnostic-code">{diagnostic.code}</span></div>;
 }
 
 type Translate = TFunction;
+
+const diagnosticTranslationKeys: Record<string, string> = {
+  "Template.RoleMatched": "roleMatched",
+  "Template.RoleFallback": "roleFallback",
+  "Template.RoleAmbiguous": "roleAmbiguous",
+  "Template.PageRoleFallback": "pageFallback",
+  "Template.PageRoleAmbiguous": "pageAmbiguous",
+  "Template.ArticleFlowMissing": "articleFlowMissing",
+  "Template.StyleFallback": "styleFallback",
+  "Template.StyleMissing": "styleMissing",
+  "Template.StyleMissingForContent": "styleMissingForContent",
+  "Template.StyleKindMismatch": "styleKindMismatch",
+  "Template.StyleRoleConflict": "styleRoleConflict",
+  "Template.FrameKindMismatch": "frameKindMismatch",
+  "Template.FallbackFrameCreated": "fallbackFrameCreated",
+  "Template.CoverImageFrameMissing": "coverImageFrameMissing",
+  "Template.StyleApplyFailed": "styleApplyFailed",
+  "Template.AnnotationTargetMissing": "annotationTargetMissing",
+  "Template.IdentityMissing": "templateIdentityMissing",
+  "Template.InspectionFailed": "templateInspectionFailed",
+  "Template.PageOrderChanged": "pageOrderChanged",
+  "Article.InvalidFrontmatter": "invalidFrontmatter",
+  "Article.TitleMismatch": "titleMismatch",
+  "Article.TitleMissing": "titleMissing",
+  "Article.ParseFailed": "parseFailed",
+  "Article.BlockSkipped": "blockSkipped",
+  "Article.QuoteShapeUnsupported": "quoteShapeUnsupported",
+  "Article.UnknownMetadata": "unknownMetadata",
+  "Article.ListFlattened": "listFlattened",
+  "Article.TableFlattened": "tableFlattened",
+  "Article.CodeBlockFlattened": "codeBlockFlattened",
+  "Article.BlockFlattened": "blockFlattened",
+  "Article.InlineImageFlattened": "inlineImageFlattened",
+  "Asset.Missing": "assetMissing",
+  "Asset.UnsupportedScheme": "assetUnsupported",
+  "Asset.ScanFailed": "assetScanFailed",
+  "Asset.PlaceholderFailed": "placeholderFailed",
+  "Font.Missing": "fontMissing",
+  "Story.UnexpectedOverset": "overset",
+  "Story.PageLimitReached": "pageLimit",
+  "Document.TextChanged": "textChanged",
+  "Document.CoverTitleMissing": "titleChanged",
+  "Document.CoverSubtitleChanged": "subtitleChanged",
+  "Document.MainStoryMissing": "mainStoryMissing",
+  "Document.PagesUnverified": "pagesUnverified",
+  "DocumentDump.SchemaInvalid": "dumpInvalid",
+  "DocumentDump.Unavailable": "dumpUnavailable",
+  "HostJob.ExecutionFailed": "hostJobFailed",
+  "Output.StageCleanupFailed": "stageCleanupFailed",
+  "Publish.Failed": "publishFailed",
+  "Publish.PdfExportFailed": "pdfFailed",
+  "Publish.HostOperationFailed": "hostOperationFailed",
+  "Publish.PreviewExportFailed": "previewFailed",
+  "Publish.PreviewPartial": "previewPartial",
+  "Publish.OptionalOutputMissing": "optionalOutputMissing",
+  "Publish.RecoveredAfterIssue": "recoveredAfterIssue"
+};
+
+function translateDiagnostic(t: Translate, diagnostic: Diagnostic): string {
+  const key = diagnosticTranslationKeys[diagnostic.code];
+  if (!key) return diagnostic.message;
+  const role = diagnostic.context?.role ?? diagnostic.path?.split(".").pop() ?? "";
+  const details = diagnostic.context?.details ?? diagnostic.message;
+  const translated = t(`app.diagnostics.${key}`, { ...(diagnostic.context ?? {}), role, details, defaultValue: "" });
+  return translated || diagnostic.message;
+}
+
+function buildChineseReport(
+  t: Translate,
+  articleTitle: string,
+  resolutions: RoleResolution[],
+  diagnostics: Diagnostic[],
+  exports: { pdfCreated: boolean; previewPages: number[] }
+): string {
+  const lines = [
+    "Folio 发布检查报告",
+    `文章：${articleTitle}`,
+    `生成时间：${new Date().toLocaleString("zh-CN")}`,
+    "",
+    "模板角色自动识别："
+  ];
+  for (const resolution of resolutions) {
+    const selected = resolution.selected;
+    if (!selected) {
+      lines.push(`- ${resolution.role}：没有找到候选对象，将按默认布局继续。`);
+      continue;
+    }
+    lines.push(`- ${resolution.role}：${selected.name}；匹配分数 ${selected.score}；${t(`app.template.confidence.${resolution.confidence}`)}（${selected.matchedBy}）。`);
+    if (resolution.candidates.length > 1) {
+      lines.push(`  其他候选：${resolution.candidates.slice(0, 3).map((candidate) => `${candidate.name}（${candidate.score}）`).join("、")}`);
+    }
+  }
+  lines.push("", "检查项目：");
+  if (!diagnostics.length) lines.push("- 未发现需要检查的问题。");
+  for (const item of diagnostics) {
+    const detail = translateDiagnostic(t, item);
+    const path = item.path ? `；位置：${item.path}` : "";
+    lines.push(`- [${item.severity}] ${detail === item.message ? `需要检查：${item.code}${path}；详细信息：${item.message}` : detail + path}`);
+  }
+  lines.push(
+    "",
+    "导出尝试：",
+    `- PDF：${exports.pdfCreated ? "已完成导出请求" : "未生成或导出失败"}`,
+    `- 页面预览：${exports.previewPages.length ? `已完成第 ${exports.previewPages.join("、")} 页的导出请求` : "未生成"}`,
+    "- INDD 与实际成果文件以报告末尾的最终文件清单为准。",
+    "",
+    "请在 InDesign 中打开 INDD，按以上提示检查排版、字体和图片。模板原文件未被修改。"
+  );
+  return lines.join("\n");
+}
 
 async function invokeHost(action: HostJob["action"], payload: Record<string, unknown>, t: Translate): Promise<Record<string, unknown>> {
   const job: HostJob = { schemaVersion: 1, jobId: crypto.randomUUID(), action, payload };

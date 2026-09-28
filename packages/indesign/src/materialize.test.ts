@@ -114,7 +114,8 @@ describe("planHostOperations", () => {
       { op: "apply-paragraph-style", storyId: "main", paragraphIndex: 2, blockId: "q1", styleName: "Article / Quote" },
       { op: "apply-paragraph-style", storyId: "main", paragraphIndex: 4, blockId: "img1", styleName: "Article / Caption" },
       { op: "apply-character-style", storyId: "main", paragraphIndex: 1, start: 2, end: 4, blockId: "p1", styleName: "Article / Emphasis" },
-      { op: "place-inline-image", storyId: "main", paragraphIndex: 3, blockId: "img1", source: "assets/a.png", objectStyleName: "Article / ImageFrame" }
+      { op: "place-inline-image", storyId: "main", paragraphIndex: 3, blockId: "img1", source: "assets/a.png", alt: "图", objectStyleName: "Article / ImageFrame" },
+      { op: "place-image-placeholder", storyId: "main", paragraphIndex: 3, blockId: "img1", source: "assets/a.png", alt: "图" }
     ]);
   });
 });

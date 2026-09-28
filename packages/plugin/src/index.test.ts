@@ -34,9 +34,9 @@ describe("publishing panel", () => {
     input.dispatchEvent(new Event("input"));
     document.querySelector("#validate-article")?.dispatchEvent(new Event("click"));
 
-    expect(document.querySelector("#validation-status")?.getAttribute("data-state")).toBe("error");
-    expect(document.querySelector("#diagnostic-list")?.textContent).toContain("Article.BlockUnsupported");
-    expect(document.querySelectorAll("#diagnostic-list [data-severity='error']")).toHaveLength(1);
+    expect(document.querySelector("#validation-status")?.getAttribute("data-state")).toBe("warning");
+    expect(document.querySelector("#diagnostic-list")?.textContent).toContain("Article.TableFlattened");
+    expect(document.querySelectorAll("#diagnostic-list [data-severity='error']")).toHaveLength(0);
 
     input.value = "# Repaired article\n\nA valid paragraph.";
     input.dispatchEvent(new Event("input"));

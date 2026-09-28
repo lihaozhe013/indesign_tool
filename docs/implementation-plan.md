@@ -4,7 +4,7 @@
 
 Folio is a local macOS app built with Tauri 2, React, TypeScript, and Rust. The user works in a WebView. Rust owns local file dialogs, Markdown writes, asset checks, staged output, and the InDesign process bridge. The UXP `.idjs` script owns all InDesign DOM calls. The existing CLI remains an offline developer interface.
 
-The product supports InDesign 2026 and templates that already carry semantic labels under `com.publisher.role`. The first release does not include template annotation or role editing. A generated document is saved as a new output; the selected template is never used as the output path. Local builds produce an ad-hoc signed macOS `.app`; DMG packaging and Apple Developer ID distribution are deferred.
+The product supports InDesign 2026 and uses automatic fuzzy role inference for local `.indd` templates. Existing semantic labels under `com.publisher.role` are a high-confidence compatibility signal, not a prerequisite. A generated document is saved as a new output; the selected template is never used as the output path. Local builds produce an ad-hoc signed macOS `.app`; DMG packaging and Apple Developer ID distribution are deferred. See [ADR 0009](decisions/0009-tolerant-template-resolution.md).
 
 ## Package boundaries
 
@@ -12,7 +12,7 @@ The product supports InDesign 2026 and templates that already carry semantic lab
 | --- | --- |
 | `contracts` | Versioned JSON-shaped schemas, diagnostics, deterministic serialization |
 | `core` | Markdown parsing, semantic planning, host-feedback loop |
-| `template` | Label-to-role mapping, inventory creation, template compilation |
+| `template` | Fuzzy role resolution, inventory creation, tolerant template compilation |
 | `indesign` | Host adapter, deterministic host operations, UXP executor, document dumps |
 | `desktop` | React WebView, Tauri commands, local file and process bridge |
 | `cli` | Offline developer commands |
@@ -26,7 +26,7 @@ The WebView interface is localized for `en` and `zh-Hans` with `i18next` and `re
 
 Rust owns the stored preference and the native View menu, which is where the language check items live; the WebView owns only the rendered language and receives a `locale-changed` event. The locale comes from a stored preference in `settings.json`, then the browser language list, then English, and a first run writes the resolved value back so the menu checkmark matches. `packages/desktop/src-tauri/src/locale.rs` extends the default menu rather than replacing it, which keeps the Edit accelerators the Markdown editor depends on.
 
-The Folio product name, InDesign, the Markdown format name, the native window title, and the bundle name are never translated. Diagnostic messages, Rust command errors, and UXP host errors stay English, which leaves a Chinese interface mixed-language. See [ADR 0008](decisions/0008-ui-localization.md) for the boundary and the route to follow if that changes.
+The Folio product name, InDesign, the Markdown format name, the native window title, and the bundle name are never translated. Persisted diagnostic messages remain English and locale-independent; the desktop maps recognized diagnostic codes to the active UI catalog, with the source message as a fallback. Rust command and raw UXP host failures may still include English details. See [ADR 0008](decisions/0008-ui-localization.md).
 
 ## HostJob v1 transport
 
@@ -38,22 +38,24 @@ Apple's UXP file API is available to Scripts Panel scripts. Earlier probe code u
 
 ## Publishing operations
 
-- **Inspect template:** scan document and parent pages, labeled frames, styles, linked assets, fonts, and host version. Derive role assignments from labels and compile through the shared template compiler.
-- **Create document:** open the template, save a new staged INDD first, retain required role pages, write the cover title, populate and style the main story, anchor article images, and save.
-- **Reflow:** use the InDesign overset observation to add Article pages, adopt or copy the labeled flow frame, thread the story, and recompose.
-- **Verify:** reopen the staged INDD, produce a canonical structure dump, confirm block text and cover title, check overset and asset status, and retain font warnings.
-- **Export:** create a PDF and one PNG for each page.
-- **Finalize:** Rust checks the staged INDD/PDF and preview count, then moves the completed set beside the chosen output path. Failed jobs discard the staged directory.
+- **Inspect template:** scan document and parent pages, frame names and types, styles, linked assets, fonts, and host version. Resolve roles from optional labels, normalized English and Chinese names, page relationships, and layout geometry. Show the selected object and top alternatives.
+- **Create document:** open the template, save a new staged INDD first, choose Cover and Article prototypes, duplicate one-page templates when needed, create fallback text frames in the output copy, populate content, and save.
+- **Reflow:** use the InDesign overset observation to add Article pages, reuse the body-frame position and parent page, thread the story, and recompose. Overflow after the page limit becomes a warning.
+- **Verify:** reopen the staged INDD and produce a canonical structure dump. Differences, missing assets/fonts, and overset are warnings that explain what needs review.
+- **Export:** attempt a PDF and each page PNG independently. A failure on one optional export does not stop later exports.
+- **Finalize:** Rust requires a nonempty staged INDD and a Chinese report. It moves any nonempty PDF and preview pages that exist, records the actual outputs, and keeps the INDD when optional exports are missing.
 
 ## Current scope and limits
 
 - macOS only, local use only, InDesign 2026 only.
-- Only pre-labeled templates with Cover and Article pages, an Article `article-flow` frame, a Cover `hero-title` frame, and the required `ArticleTitle`, `SectionHeading`, and `Body` styles are accepted. Articles with subtitles also require a `hero-subtitle` frame; content that uses quotes, captions, emphasis, links, or code needs the matching style roles.
+- Templates do not need role labels or a complete set of pages, frames, and styles. Matching names and geometry improve confidence. Missing title, subtitle, or article-flow frames receive output-copy fallbacks; a missing cover-image frame is skipped. Missing styles use compatible styles or InDesign defaults. Explicitly named or labeled Ending pages are retained; ordinary extra pages are omitted.
+- Lists, tables, code blocks, multi-paragraph quotes, inline images, and unknown Markdown nodes are preserved as readable content when practical, with formatting reduced as needed. Unavailable images receive visible inline notices with filename and alt text.
+- An editable nonempty INDD and UTF-8 Chinese report are required. PDF and each PNG are optional deliverables. A successful INDD with warnings is `degraded`; a clean output is `complete`; hard host, file, protocol, or empty-document failures are `failed`.
 - Local relative image paths are resolved from the saved Markdown file.
 - Host typography and fit remain InDesign decisions. The core does not estimate line breaks.
 - The old plugin source remains in the repository for historical comparison but is excluded from the workspace build and product workflow.
-- Signing, notarized public distribution, template-role editing, and designer-template acceptance are future work.
+- Signing, notarized public distribution, and representative real-template host acceptance are future work.
 
 ## Acceptance
 
-Regenerate the ignored synthetic template from `packages/indesign/probes/synthetic-template-probe.idjs` before host acceptance. The existing `.indd` and scan result predate the latest probe revision: the document is no longer empty, but its recorded role inventory omits `hero-subtitle`, `Subtitle`, `Link`, and `InlineImage`. Acceptance uses basic text, long Chinese and mixed-language copy, captions and images, forced overset, and missing assets. A packaged macOS app must also exercise InDesign unavailable, Apple Events authorization, timeout, and damaged result cases. See [testing strategy](testing.md) for the host and packaging lanes.
+The ignored synthetic template and scan result must be regenerated before using them as evidence. Acceptance still needs five representative template shapes: a conventional labeled template, clear English names without labels, Chinese or fuzzy names, conflicting candidates, and a one-page template with missing frames/styles. Test missing images/fonts, long text, overset, and partial PDF/PNG failures. A packaged macOS app must also exercise InDesign unavailable, Apple Events authorization, timeout, inaccessible output, damaged template, and damaged HostJob cases. See [testing strategy](testing.md) for the host and packaging lanes.

@@ -264,6 +264,7 @@ export interface HostObservation {
   overset: HostOverset[];
   missingAssets: string[];
   missingFonts: string[];
+  warnings?: Diagnostic[];
 }
 
 export interface HostJob {
@@ -318,6 +319,7 @@ export interface DocumentDump {
   }>;
   frames: Array<{
     semanticRole?: string;
+    storyId?: string;
     pageIndex?: number;
     bounds?: [number, number, number, number];
     previousFrame?: string;

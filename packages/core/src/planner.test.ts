@@ -55,13 +55,32 @@ describe("publishing planner", () => {
     expect(result.diagnostics.map((item) => item.code)).toEqual(["Asset.Missing", "Font.Missing"]);
   });
 
-  it("does not report a missing-asset render as complete", () => {
+  it("reports a missing-asset render as degraded while keeping the plan publishable", () => {
     const article = parseArticle("# Title\n\nBody.").document!;
     const planned = planDocument(article, template).ir!;
     const result = respondToObservation(planned, template, fakeObservation({ missingAssets: ["missing.png"] }));
-    expect(result.complete).toBe(false);
+    expect(result.complete).toBe(true);
     expect(result.ir).toEqual(planned);
     expect(result.diagnostics[0]?.code).toBe("Asset.Missing");
+  });
+
+  it("returns degraded and failed publish statuses without conflating warnings with host failures", async () => {
+    const article = parseArticle("# Title\n\nBody.").document!;
+    const degradedHost = new FakeHostAdapter(makeInventory(), [fakeObservation({ missingFonts: ["Example Font"] })]);
+    const degraded = await publishDocument(degradedHost, {
+      templatePath: "template.indd", outputPath: "degraded.indd", document: article, template
+    });
+    expect(degraded.status).toBe("degraded");
+    expect(degraded.complete).toBe(true);
+
+    const failedHost = new FakeHostAdapter(makeInventory());
+    failedHost.render = async () => { throw new Error("InDesign timed out"); };
+    const failed = await publishDocument(failedHost, {
+      templatePath: "template.indd", outputPath: "failed.indd", document: article, template
+    });
+    expect(failed.status).toBe("failed");
+    expect(failed.complete).toBe(false);
+    expect(failed.diagnostics).toContainEqual(expect.objectContaining({ code: "Publish.HostOperationFailed", severity: "error" }));
   });
 
   it("records caption roles separately from the image object role", () => {
@@ -86,6 +105,7 @@ describe("publishing planner", () => {
       template
     });
     expect(result.complete).toBe(true);
+    expect(result.status).toBe("complete");
     expect(result.ir?.pages.map((page) => page.role)).toEqual(["Cover", "Article", "Article", "Ending"]);
     expect(host.operations).toEqual(["render:create:3", "render:appendPages:4"]);
   });

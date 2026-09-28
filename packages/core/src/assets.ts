@@ -13,14 +13,14 @@ export function validateAssetReferences(
       diagnostics.push({
         code: "Asset.UnsupportedScheme",
         message: "Only local relative image assets are supported in v1: " + block.src,
-        severity: "error",
+        severity: "warning",
         path: "blocks." + block.id + ".src"
       });
     } else if (!isAvailable(block.src)) {
       diagnostics.push({
         code: "Asset.Missing",
         message: "Image asset was not found: " + block.src,
-        severity: "error",
+        severity: "warning",
         path: "blocks." + block.id + ".src",
         context: { source: block.src }
       });

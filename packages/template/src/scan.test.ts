@@ -81,7 +81,7 @@ describe("createTemplateInventory", () => {
     expect(result.diagnostics).toEqual([]);
     expect(result.inventory?.frames[0]).toMatchObject({ pageRef: "page:2", role: "article-flow" });
     const compiled = compileTemplate(result.inventory!);
-    expect(compiled.diagnostics).toEqual([]);
+    expect(compiled.diagnostics.every((item) => item.severity !== "error")).toBe(true);
     expect(compiled.template?.pageRoles.Article).toEqual({ sourcePageRef: "page:2", flowFrameRef: "frame:1" });
   });
 

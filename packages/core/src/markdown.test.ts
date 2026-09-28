@@ -24,11 +24,43 @@ describe("parseArticle", () => {
     expect(image?.type === "image" ? image.caption?.[0]?.text : undefined).toBe("A sample figure");
   });
 
-  it("reports title mismatch and unsupported table syntax", async () => {
+  it("keeps title conflicts and tables while reporting plain-text fallback", async () => {
     const mismatch = parseArticle("---\ntitle: Frontmatter\n---\n\n# Different\n");
     expect(mismatch.diagnostics.map((item) => item.code)).toContain("Article.TitleMismatch");
     const table = await readFile(new URL("../../../fixtures/articles/unsupported-table.md", import.meta.url), "utf8");
-    expect(parseArticle(table).diagnostics.map((item) => item.code)).toContain("Article.BlockUnsupported");
+    const result = parseArticle(table);
+    expect(result.document).toBeDefined();
+    expect(result.diagnostics.map((item) => item.code)).toContain("Article.TableFlattened");
+    expect(result.document?.blocks.some((block) => block.type === "paragraph" && block.content[0]?.text.includes("|"))).toBe(true);
+  });
+
+  it("always returns a document for empty input, invalid frontmatter, and missing titles", () => {
+    const empty = parseArticle("");
+    expect(empty.document?.metadata.title).toBe("Untitled article");
+    expect(empty.diagnostics.map((item) => item.code)).toContain("Article.TitleMissing");
+
+    const invalidYaml = parseArticle("---\ntitle: [broken\n---\n\nBody text.");
+    expect(invalidYaml.document?.blocks).toHaveLength(1);
+    expect(invalidYaml.diagnostics.map((item) => item.code)).toContain("Article.InvalidFrontmatter");
+
+    const missingTitle = parseArticle("Body only.", { sourceId: "/articles/field-notes.md" });
+    expect(missingTitle.document?.metadata.title).toBe("field-notes");
+  });
+
+  it("flattens lists, code, tables, and multi-paragraph quotes without losing their text", () => {
+    const result = parseArticle("# Title\n\n- First\n- Second\n\n| A | B |\n|---|---|\n| one | two |\n\n```js\nconst x = 1;\n```\n\n> One quote.\n>\n> Another quote.");
+    expect(result.document?.blocks.map((block) => block.type)).toEqual(["paragraph", "paragraph", "paragraph", "paragraph", "paragraph", "quote", "quote"]);
+    const text = result.document?.blocks.flatMap((block) => block.type === "divider" ? [] : block.type === "image" ? block.caption ?? [] : block.content).map((run) => run.text).join(" ");
+    expect(text).toContain("• First");
+    expect(text).toContain("one | two");
+    expect(text).toContain("const x = 1;");
+    expect(text).toContain("Another quote.");
+  });
+
+  it("splits inline images into text, image, and following text blocks", () => {
+    const result = parseArticle("# Title\n\nBefore ![alt](figure.png \"Caption\") after.");
+    expect(result.document?.blocks.map((block) => block.type)).toEqual(["paragraph", "image", "paragraph"]);
+    expect(result.document?.blocks[1]).toMatchObject({ type: "image", src: "figure.png", alt: "alt", caption: [{ text: "Caption", marks: [] }] });
   });
 
   it("produces deterministic identifiers for unchanged blocks when another block is inserted", () => {

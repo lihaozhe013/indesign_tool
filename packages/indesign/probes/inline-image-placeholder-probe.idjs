@@ -1,0 +1,65 @@
+const { app, SaveOptions, AnchorPosition } = require("indesign");
+
+const inDesign = require("indesign");
+
+function read(readValue, fallback) {
+  try {
+    const value = readValue();
+    return value === undefined || value === null ? fallback : value;
+  } catch (_error) {
+    return fallback;
+  }
+}
+
+async function settled(value) {
+  return value && typeof value.then === "function" ? await value : value;
+}
+
+const result = {
+  capability: "inline-image-placeholder-frame",
+  hostVersion: String(app.version),
+  success: false
+};
+let document;
+try {
+  document = await settled(app.documents.add());
+  const page = document.pages.item(0);
+  const pageBounds = page.bounds;
+  const storyFrame = page.textFrames.add({
+    geometricBounds: [pageBounds[0] + 30, pageBounds[1] + 30, pageBounds[0] + 140, pageBounds[3] - 30],
+    contents: "Text before and after."
+  });
+  const story = storyFrame.parentStory;
+  const insertionPoint = story.insertionPoints.item(5);
+  const placeholder = insertionPoint.textFrames.add({
+    geometricBounds: [pageBounds[0] + 145, pageBounds[1] + 30, pageBounds[0] + 195, pageBounds[1] + 210]
+  });
+  placeholder.contents = "MISSING IMAGE: sample.jpg";
+  placeholder.anchoredObjectSettings.anchoredPosition = AnchorPosition.INLINE_POSITION;
+  placeholder.strokeWeight = 1.5;
+  const anchorHost = placeholder.parent;
+  const anchoredPosition = String(read(function () { return placeholder.anchoredObjectSettings.anchoredPosition; }, "UNKNOWN"));
+  const anchorHostStoryId = read(function () { return anchorHost.parentStory.id; }, null);
+  result.frameName = String(placeholder.constructor.name);
+  result.anchoredPosition = anchoredPosition;
+  result.anchorHostType = String(read(function () { return anchorHost.constructor.name; }, "UNKNOWN"));
+  result.anchorHostStoryId = anchorHostStoryId;
+  result.storyId = read(function () { return story.id; }, null);
+  result.storyContents = String(story.contents);
+  result.anchorCharacterCount = story.characters.length;
+  result.inline = anchoredPosition.indexOf("INLINE_POSITION") >= 0 || anchoredPosition === String(AnchorPosition.INLINE_POSITION);
+  result.success = Boolean(result.inline && result.anchorHostType === "Character" && result.anchorHostStoryId === result.storyId && result.anchorCharacterCount > 1);
+} catch (error) {
+  result.error = String(error && error.stack ? error.stack : error);
+} finally {
+  if (document) {
+    try {
+      await settled(document.close(SaveOptions.NO));
+      result.documentClosed = true;
+    } catch (error) {
+      result.documentClosed = false;
+      result.closeError = String(error && error.stack ? error.stack : error);
+    }
+  }
+  console.log("FOLIO_INLINE_IMAGE_PLACEHOLDER_PROBE_V1 " + JSON.stringify(result));
+}

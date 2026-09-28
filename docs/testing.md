@@ -9,7 +9,7 @@ pnpm validate
 pnpm desktop:build
 ```
 
-The default validation does not require Adobe software. TypeScript/Vitest cover Markdown parsing, schema validation, template compilation, page planning, diagnostics, reflow, deterministic host operations, and package boundaries. Rust tests cover AppleScript quoting, generated per-job scripts, result validation, file extensions, asset URL checks, and staged output finalization.
+The default validation does not require Adobe software. TypeScript/Vitest cover Markdown fallback parsing, fuzzy role resolution, template compilation, page planning, diagnostics, reflow, deterministic host operations, and package boundaries. Rust tests cover AppleScript quoting, generated per-job scripts, result validation, file extensions, asset URL checks, and keeping required files when optional staged outputs are missing or partial.
 
 The desktop build checks Vite output, Tauri configuration, the macOS bundle metadata, and the Apple Events usage description. On macOS, verify the built app bundle signature with:
 
@@ -21,17 +21,28 @@ The local build uses an ad-hoc signature; it does not prove that InDesign accept
 
 ## InDesign host lane
 
-Use InDesign 2026 on macOS and a disposable synthetic template. The generator is `packages/indesign/probes/synthetic-template-probe.idjs`. Regenerate `artifacts/host/indesign-21.0.0.192/templates/synthetic-cover-article.indd` before testing: the current ignored `.indd` is non-empty, but it and its scan result predate the latest generator revision. The recorded role inventory omits `hero-subtitle`, `Subtitle`, `Link`, and `InlineImage`. Confirm the fresh inventory includes those roles (as well as `hero-title`, `hero-image`, `article-flow`, `Cover`, `Article`, and the other generated style roles) before using the fixture.
+Use InDesign 2026 on macOS and disposable templates. The ignored synthetic template and scan were regenerated from `packages/indesign/probes/synthetic-template-probe.idjs` during this implementation; regenerate them again after changing the fixture generator. The inline anchored-placeholder capability was verified separately by `packages/indesign/probes/inline-image-placeholder-probe.idjs` on InDesign 21.0.0.192. Host acceptance through the desktop app is still pending.
 
-Run the desktop app and verify:
+On 2026-09-27, the current resolver and UXP HostJob runner were exercised directly against the regenerated synthetic template with a missing image. InDesign produced a nonempty editable INDD, kept the missing image and caption text, placed an inline Chinese warning frame within the article page, passed the saved-document text check, and exported a PDF plus both page PNGs. This smoke run does not replace acceptance through the packaged app.
 
-1. Template scan derives Cover, Article, `article-flow`, `hero-title`, and required paragraph styles from labels.
-2. A basic article produces an editable INDD, a PDF, and one PNG preview per page.
-3. Long Chinese and mixed Chinese/English text triggers InDesign overflow, adds pages, and retains every block and character after save/reopen.
-4. A standalone image with a caption appears in the article and cover image frame; image links are present and captions retain their text.
-5. A deliberately missing image is reported and staged files are discarded.
-6. An absent InDesign host, denied Apple Events permission, a timed-out script, and a malformed result produce explicit errors and no final deliverables.
-7. The packaged `.app` contains `NSAppleEventsUsageDescription`; launch it and complete the first control-InDesign permission flow.
+On 2026-09-28, the direct UXP HostJob runner also produced nonempty editable INDDs from four additional disposable templates: untagged English names, fuzzy Chinese names, conflicting frame/style candidates, and one page with no frames or custom styles. The one-page case includes an unused parent page and verifies Folio uses the document page for both output prototypes. These synthetic host runs do not replace acceptance through the packaged app or real editorial templates.
+
+Run the packaged desktop app with at least these five template shapes and verify every case produces a nonempty editable INDD:
+
+1. A conventional template with existing role labels.
+2. A template without labels but with clear English names.
+3. A template with Chinese names and fuzzy matches.
+4. A template with multiple conflicting frames/styles and wrong-type candidates.
+5. A one-page template with missing frames and styles.
+
+Also verify:
+
+- A basic article saves as INDD; PDF and all page previews are retained when their exports succeed.
+- Long Chinese and mixed-language copy can trigger InDesign reflow; residual overflow and text differences appear as warnings.
+- Available and missing images, captions, font substitution, and links are recorded without discarding the INDD. A missing image gets an inline warning frame when the host capability succeeds.
+- PDF export and each PNG export can fail independently; only nonempty successful optional files appear in the output list and report.
+- An unavailable InDesign host, denied Apple Events permission, timeout, damaged template, inaccessible output, empty INDD, or malformed HostJob produces an explicit failure and never treats an empty file as success.
+- The packaged `.app` contains `NSAppleEventsUsageDescription`; launch it and complete the first control-InDesign permission flow.
 
 Keep host artifacts under ignored `artifacts/host/`; do not commit user documents, templates, linked images, PDFs, or fonts.
 
@@ -43,6 +54,6 @@ The UXP script must use global/top-level `await` for file operations. Adobe docu
 
 ## Document verification
 
-The canonical dump records page roles and order, story paragraphs and styles, semantic block IDs, labeled frame roles and bounds, overset, missing links, and font status. Keep text checks exact for non-image paragraphs. InDesign owns composition and may produce font warnings; a font warning is visible but does not silently become a layout failure.
+The canonical dump records output page roles and order, story paragraphs and styles, semantic block IDs, resolved frame roles and bounds, overset, missing links, and font status. Exact text checks still run, but differences are warnings so Folio can deliver the editable document for review. InDesign owns composition and may substitute fonts or leave overset.
 
-For PDF acceptance, compare exported page count with the InDesign document page count. Raster review uses the per-page PNGs from the same host version and installed font set. Review visual baselines manually; they are outside the offline validation lane.
+For PDF acceptance, compare exported page count with the InDesign document page count when a PDF exists. Raster review uses whatever nonempty per-page PNGs were produced for the same host version and installed fonts. Review visual baselines manually; they are outside the offline validation lane.

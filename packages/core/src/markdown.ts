@@ -13,6 +13,7 @@ import type { Content, PhrasingContent, Root } from "mdast";
 
 export interface ParseArticleOptions {
   sourceId?: string;
+  fallbackTitle?: string;
 }
 
 export interface ParseArticleResult {
@@ -30,7 +31,8 @@ export function parseArticle(markdown: string, options: ParseArticleOptions = {}
     tree = parser.parse(normalized) as Root;
   } catch (error) {
     return {
-      diagnostics: [{ code: "Article.ParseFailed", message: errorMessage(error), severity: "error" }]
+      document: fallbackDocument(normalized, options),
+      diagnostics: [{ code: "Article.ParseFailed", message: errorMessage(error), severity: "warning" }]
     };
   }
 
@@ -43,10 +45,10 @@ export function parseArticle(markdown: string, options: ParseArticleOptions = {}
         if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
           Object.assign(metadata, parsed);
         } else if (parsed !== null) {
-          diagnostics.push({ code: "Article.InvalidFrontmatter", message: "Frontmatter must be a mapping", severity: "error" });
+          diagnostics.push({ code: "Article.InvalidFrontmatter", message: "Frontmatter must be a mapping; it was ignored.", severity: "warning" });
         }
       } catch (error) {
-        diagnostics.push({ code: "Article.InvalidFrontmatter", message: errorMessage(error), severity: "error" });
+        diagnostics.push({ code: "Article.InvalidFrontmatter", message: errorMessage(error), severity: "warning" });
       }
     } else {
       contentNodes.push(node);
@@ -66,7 +68,7 @@ export function parseArticle(markdown: string, options: ParseArticleOptions = {}
     if (firstH1 >= 0) {
       const headingText = plainText((contentNodes[firstH1] as Extract<Content, { type: "heading" }>).children);
       if (headingText.trim() === title) titleHeadingIndex = firstH1;
-      else diagnostics.push({ code: "Article.TitleMismatch", message: "The first level-one heading must match frontmatter title", severity: "error", path: `blocks.${firstH1}` });
+      else diagnostics.push({ code: "Article.TitleMismatch", message: "The frontmatter title is used on the cover; the different level-one heading remains in the article.", severity: "warning", path: `blocks.${firstH1}` });
     }
   } else {
     titleHeadingIndex = contentNodes.findIndex((node) => node.type === "heading" && node.depth === 1);
@@ -74,18 +76,20 @@ export function parseArticle(markdown: string, options: ParseArticleOptions = {}
       title = plainText((contentNodes[titleHeadingIndex] as Extract<Content, { type: "heading" }>).children).trim();
     }
   }
-  if (!title) diagnostics.push({ code: "Article.TitleMissing", message: "Provide a title in frontmatter or as the first level-one heading", severity: "error" });
+  if (!title) {
+    title = fallbackTitle(options);
+    diagnostics.push({ code: "Article.TitleMissing", message: "No title was found; Folio used a fallback title.", severity: "warning" });
+  }
 
   const blocks: SemanticBlock[] = [];
   const idCounts = new Map<string, number>();
   contentNodes.forEach((node, index) => {
     if (index === titleHeadingIndex) return;
     const converted = convertBlock(node, index, idCounts, diagnostics);
-    if (converted) blocks.push(converted);
+    blocks.push(...converted);
   });
 
-  if (diagnostics.some((item) => item.severity === "error")) return { diagnostics };
-  const titleText = title || "Untitled";
+  const titleText = title || fallbackTitle(options);
   const subtitle = stringField(metadata.subtitle);
   const author = stringField(metadata.author);
   const language = stringField(metadata.language);
@@ -108,41 +112,111 @@ function convertBlock(
   index: number,
   idCounts: Map<string, number>,
   diagnostics: Diagnostic[]
-): SemanticBlock | undefined {
+): SemanticBlock[] {
   if (node.type === "heading") {
     const content = phrasingRuns(node.children, diagnostics, `blocks.${index}`);
-    return { id: blockId("heading", runsText(content), idCounts), type: "heading", level: Math.min(node.depth, 3) as 1 | 2 | 3, content };
+    return [{ id: blockId("heading", runsText(content), idCounts), type: "heading", level: Math.min(node.depth, 3) as 1 | 2 | 3, content }];
   }
   if (node.type === "paragraph") {
-    const image = node.children.length === 1 && node.children[0]?.type === "image" ? node.children[0] : undefined;
-    if (image) {
-      return {
-        id: blockId("image", `${image.url}\n${image.alt ?? ""}\n${image.title ?? ""}`, idCounts),
-        type: "image",
-        src: image.url,
-        alt: image.alt ?? "",
-        ...(image.title ? { caption: [{ text: image.title, marks: [] }] } : {})
-      };
-    }
-    if (node.children.some((child) => child.type === "image")) {
-      diagnostics.push({ code: "Article.InlineImageUnsupported", message: "Images must be a standalone paragraph in v1", severity: "error", path: `blocks.${index}` });
-      return undefined;
-    }
-    const content = phrasingRuns(node.children, diagnostics, `blocks.${index}`);
-    return { id: blockId("paragraph", runsText(content), idCounts), type: "paragraph", content };
+    return convertParagraph(node.children, index, idCounts, diagnostics);
   }
   if (node.type === "blockquote") {
     const paragraphs = node.children.filter((child) => child.type === "paragraph");
-    if (paragraphs.length !== node.children.length || paragraphs.length !== 1) {
-      diagnostics.push({ code: "Article.QuoteShapeUnsupported", message: "A quote must contain exactly one paragraph in v1", severity: "error", path: `blocks.${index}` });
-      return undefined;
+    if (paragraphs.length !== node.children.length) {
+      diagnostics.push({ code: "Article.QuoteShapeUnsupported", message: "Non-paragraph quote content was converted to plain text.", severity: "warning", path: `blocks.${index}` });
     }
-    const content = phrasingRuns(paragraphs[0]!.children, diagnostics, `blocks.${index}`);
-    return { id: blockId("quote", runsText(content), idCounts), type: "quote", content };
+    const contentNodes = paragraphs.length ? paragraphs : [node.children[0]];
+    return contentNodes.flatMap((paragraph) => {
+      if (!paragraph) return [];
+      const text = paragraph.type === "paragraph"
+        ? phrasingRuns(paragraph.children, diagnostics, `blocks.${index}`)
+        : [{ text: plainTextNode(paragraph), marks: [] as TextRun["marks"] }];
+      return [{ id: blockId("quote", runsText(text), idCounts), type: "quote" as const, content: text }];
+    });
   }
-  if (node.type === "thematicBreak") return { id: blockId("divider", String(index), idCounts), type: "divider" };
-  diagnostics.push({ code: "Article.BlockUnsupported", message: `Unsupported Markdown block: ${node.type}`, severity: "error", path: `blocks.${index}` });
-  return undefined;
+  if (node.type === "thematicBreak") return [{ id: blockId("divider", String(index), idCounts), type: "divider" }];
+  if (node.type === "list") {
+    diagnostics.push({ code: "Article.ListFlattened", message: "List formatting was converted to text.", severity: "warning", path: `blocks.${index}` });
+    const blocks = node.children.flatMap((item, itemIndex) => {
+      const prefix = node.ordered ? `${(node.start ?? 1) + itemIndex}. ` : "• ";
+      const value = item.children.map(plainTextNode).filter(Boolean).join(" ");
+      if (!value) return [];
+      const content = [{ text: prefix + value, marks: [] as TextRun["marks"] }];
+      return [{ id: blockId("paragraph", runsText(content), idCounts), type: "paragraph" as const, content }];
+    });
+    return blocks;
+  }
+  if (node.type === "table") {
+    diagnostics.push({ code: "Article.TableFlattened", message: "Table rows were converted to text separated by vertical bars.", severity: "warning", path: `blocks.${index}` });
+    return node.children.map((row) => {
+      const content = [{ text: row.children.map(plainTextNode).join(" | "), marks: [] as TextRun["marks"] }];
+      return { id: blockId("paragraph", runsText(content), idCounts), type: "paragraph" as const, content };
+    });
+  }
+  if (node.type === "code") {
+    diagnostics.push({ code: "Article.CodeBlockFlattened", message: "Code block formatting was removed; code text was preserved.", severity: "warning", path: `blocks.${index}` });
+    const content = [{ text: node.value, marks: [] as TextRun["marks"] }];
+    return [{ id: blockId("paragraph", node.value, idCounts), type: "paragraph", content }];
+  }
+  const flattened = plainTextNode(node).trim();
+  if (flattened) {
+    diagnostics.push({ code: "Article.BlockFlattened", message: `Unsupported Markdown block ${node.type} was converted to text.`, severity: "warning", path: `blocks.${index}` });
+    const content = [{ text: flattened, marks: [] as TextRun["marks"] }];
+    return [{ id: blockId("paragraph", flattened, idCounts), type: "paragraph", content }];
+  }
+  diagnostics.push({ code: "Article.BlockSkipped", message: `Empty Markdown block ${node.type} was skipped.`, severity: "warning", path: `blocks.${index}` });
+  return [];
+}
+
+function convertParagraph(
+  nodes: PhrasingContent[],
+  index: number,
+  idCounts: Map<string, number>,
+  diagnostics: Diagnostic[]
+): SemanticBlock[] {
+  const blocks: SemanticBlock[] = [];
+  let runs: TextRun[] = [];
+  const append = (value: string, marks: TextRun["marks"], href?: string) => {
+    if (!value) return;
+    const previous = runs[runs.length - 1];
+    if (previous && previous.marks.join(",") === marks.join(",") && previous.href === href) previous.text += value;
+    else runs.push({ text: value, marks, ...(href ? { href } : {}) });
+  };
+  const flush = () => {
+    if (!runs.length) return;
+    const text = runsText(runs);
+    blocks.push({ id: blockId("paragraph", text, idCounts), type: "paragraph", content: runs });
+    runs = [];
+  };
+  const addImage = (src: string, alt: string, caption?: string) => {
+    flush();
+    blocks.push({
+      id: blockId("image", `${src}\n${alt}\n${caption ?? ""}`, idCounts),
+      type: "image",
+      src,
+      alt,
+      ...(caption ? { caption: [{ text: caption, marks: [] }] } : {})
+    });
+  };
+  const walk = (node: PhrasingContent, marks: TextRun["marks"] = [], href?: string): void => {
+    if (node.type === "text") append(node.value, marks, href);
+    else if (node.type === "image") addImage(node.url, node.alt ?? "", node.title ?? undefined);
+    else if (node.type === "imageReference") addImage(node.identifier, node.alt ?? "");
+    else if (node.type === "inlineCode") append(node.value, [...marks, "code"], href);
+    else if (node.type === "strong" || node.type === "emphasis") {
+      const mark = node.type === "strong" ? "strong" : "emphasis";
+      for (const child of node.children) walk(child, [...marks, mark], href);
+    } else if (node.type === "link" || node.type === "linkReference") {
+      const link = node.type === "link" ? node.url : node.identifier;
+      for (const child of node.children) walk(child, [...marks, "link"], link);
+    } else if (node.type === "break") append("\n", marks, href);
+    else if ("children" in node) {
+      for (const child of node.children) walk(child as PhrasingContent, marks, href);
+    }
+  };
+  for (const node of nodes) walk(node);
+  flush();
+  return blocks;
 }
 
 function phrasingRuns(nodes: PhrasingContent[], diagnostics: Diagnostic[], path: string): TextRun[] {
@@ -167,7 +241,8 @@ function phrasingRuns(nodes: PhrasingContent[], diagnostics: Diagnostic[], path:
       }
     } else if (node.type === "break") append("\n", marks);
     else if (node.type === "image" || node.type === "imageReference") {
-      diagnostics.push({ code: "Article.InlineImageUnsupported", message: "Inline images are unsupported in v1", severity: "error", path });
+      diagnostics.push({ code: "Article.InlineImageFlattened", message: "Image placement was separated from surrounding text.", severity: "warning", path });
+      append(node.alt ?? "", marks);
     } else if ("children" in node) {
       for (const child of node.children) walk(child as PhrasingContent, marks);
     }
@@ -183,6 +258,36 @@ function plainText(nodes: PhrasingContent[]): string {
     if ("children" in node) return plainText(node.children as PhrasingContent[]);
     return "";
   }).join("");
+}
+
+function plainTextNode(node: unknown): string {
+  if (typeof node === "string") return node;
+  if (!node || typeof node !== "object") return "";
+  const record = node as { value?: unknown; alt?: unknown; children?: unknown[]; url?: unknown };
+  if (typeof record.value === "string") return record.value;
+  if (typeof record.alt === "string") return record.alt;
+  if (Array.isArray(record.children)) return record.children.map(plainTextNode).filter(Boolean).join(" ");
+  return typeof record.url === "string" ? record.url : "";
+}
+
+function fallbackDocument(source: string, options: ParseArticleOptions): SemanticDocument {
+  const title = fallbackTitle(options);
+  const text = source.trim();
+  const blocks: SemanticBlock[] = text
+    ? [{ id: blockId("paragraph", text, new Map()), type: "paragraph", content: [{ text, marks: [] }] }]
+    : [];
+  return {
+    schemaVersion: 1,
+    id: `article-${hashText(options.sourceId?.trim() || title)}`,
+    metadata: { title },
+    blocks
+  };
+}
+
+function fallbackTitle(options: ParseArticleOptions): string {
+  const sourceId = options.sourceId?.replace(/\\/g, "/").split("/").pop() ?? "";
+  const stem = sourceId.replace(/\.(md|markdown)$/i, "").trim();
+  return stem && stem !== "desktop-draft" ? stem : options.fallbackTitle ?? "Untitled article";
 }
 
 function runsText(runs: TextRun[]): string {

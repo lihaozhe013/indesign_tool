@@ -5,21 +5,24 @@ import { compileTemplate } from "./index.js";
 describe("compileTemplate", () => {
   it("compiles page, flow-frame, and named style roles deterministically", () => {
     const result = compileTemplate(makeInventory());
-    expect(result.diagnostics).toEqual([]);
+    expect(result.diagnostics.every((item) => item.severity !== "error")).toBe(true);
+    expect(result.diagnostics.map((item) => item.code)).toContain("Template.StyleFallback");
     expect(result.template?.pageRoles.Article?.flowFrameRef).toBe("article-flow-frame");
     expect(result.template?.styleRoles.Body).toBe("Editorial / Body");
   });
 
-  it("reports missing page roles, styles, and flow frames", () => {
+  it("compiles with missing page roles, styles, and flow frames using fallbacks", () => {
     const inventory = makeInventory();
     inventory.pages = inventory.pages.filter((page) => page.role !== "Cover");
     inventory.frames = [];
     inventory.styles = inventory.styles.filter((style) => style.name !== "Body");
     const result = compileTemplate(inventory);
-    expect(result.template).toBeUndefined();
+    expect(result.template).toBeDefined();
     expect(result.diagnostics.map((item) => item.code)).toEqual(expect.arrayContaining([
-      "Template.PageRoleMissing", "Template.ArticleFlowMissing", "Template.StyleMissing"
+      "Template.PageRoleFallback", "Template.ArticleFlowMissing", "Template.StyleFallback"
     ]));
+    expect(result.template?.frameRoles["article-flow"]).toBe("$auto:article-flow");
+    expect(result.template?.frameRoles["hero-title"]).toBe("$auto:hero-title");
   });
 
   it("rejects duplicate flow references and style kind mismatches", () => {

@@ -45,7 +45,8 @@ export type HostOperation =
   | { op: "set-story-text"; storyId: string; text: string }
   | { op: "apply-paragraph-style"; storyId: string; paragraphIndex: number; blockId: string; styleName: string }
   | { op: "apply-character-style"; storyId: string; paragraphIndex: number; start: number; end: number; blockId: string; styleName: string }
-  | { op: "place-inline-image"; storyId: string; paragraphIndex: number; blockId: string; source: string; objectStyleName?: string }
+  | { op: "place-inline-image"; storyId: string; paragraphIndex: number; blockId: string; source: string; alt: string; objectStyleName?: string }
+  | { op: "place-image-placeholder"; storyId: string; paragraphIndex: number; blockId: string; source: string; alt: string }
   | { op: "ensure-frame-threading"; pageIds: string[]; storyId: string };
 
 export interface HostPlanResult {
@@ -81,14 +82,14 @@ export function materializeMainStory(
     const styleRole = storyIr.blockStyleRoles[blockId];
     const styleName = resolveStyleName(template, styleRole);
     if (styleRole && !styleName) {
-      diagnostics.push(fallbackError("Template.StyleMissingForContent", "No template style resolves role " + styleRole + " for block " + blockId));
+      diagnostics.push(fallbackWarning("Template.StyleMissingForContent", "No template style resolves role " + styleRole + " for block " + blockId + "; InDesign defaults will be used."));
     }
     for (const paragraph of blockParagraphs(block, styleRole)) {
       const paragraphStyleName = paragraph.styleRole
         ? resolveStyleName(template, paragraph.styleRole)
         : undefined;
       if (paragraph.styleRole && !paragraphStyleName) {
-        diagnostics.push(fallbackError("Template.StyleMissingForContent", "No template style resolves role " + paragraph.styleRole + " for block " + blockId));
+        diagnostics.push(fallbackWarning("Template.StyleMissingForContent", "No template style resolves role " + paragraph.styleRole + " for block " + blockId + "; InDesign defaults will be used."));
       }
       const index = paragraphs.length;
       paragraphs.push({
@@ -102,7 +103,7 @@ export function materializeMainStory(
       for (const run of paragraph.runs) {
         const runStyleName = resolveStyleName(template, run.styleRole);
         if (!runStyleName) {
-          diagnostics.push(fallbackError("Template.StyleMissingForContent", "No template style resolves role " + run.styleRole + " for block " + blockId));
+          diagnostics.push(fallbackWarning("Template.StyleMissingForContent", "No template style resolves role " + run.styleRole + " for block " + blockId + "; text formatting was skipped."));
           continue;
         }
         characterRuns.push({
@@ -185,7 +186,16 @@ export function planHostOperations(
       paragraphIndex: imageParagraph.index,
       blockId: placement.blockId,
       source: placement.source,
+      alt: placement.alt,
       ...(objectStyleName ? { objectStyleName } : {})
+    });
+    operations.push({
+      op: "place-image-placeholder",
+      storyId: materialized.story.storyId,
+      paragraphIndex: imageParagraph.index,
+      blockId: placement.blockId,
+      source: placement.source,
+      alt: placement.alt
     });
   }
 
@@ -240,4 +250,8 @@ function resolveStyleName(template: CompiledTemplate, role: StyleRole | undefine
 
 function fallbackError(code: string, message: string): Diagnostic {
   return { code, message, severity: "error" };
+}
+
+function fallbackWarning(code: string, message: string): Diagnostic {
+  return { code, message, severity: "warning" };
 }

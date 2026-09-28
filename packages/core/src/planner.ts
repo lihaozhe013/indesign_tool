@@ -14,10 +14,10 @@ export interface PlanningResult {
 
 export function planDocument(document: SemanticDocument, template: CompiledTemplate): PlanningResult {
   const diagnostics: Diagnostic[] = [];
-  if (!template.pageRoles.Cover) diagnostics.push(error("Template.PageRoleMissing", "Template has no Cover page role"));
-  if (!template.pageRoles.Article?.flowFrameRef) diagnostics.push(error("Template.ArticleFlowMissing", "Template has no Article flow frame"));
-  if (!template.styleRoles.ArticleTitle) diagnostics.push(error("Template.StyleMissing", "Template has no ArticleTitle style"));
-  if (document.metadata.subtitle && !template.styleRoles.Subtitle) diagnostics.push(error("Template.StyleMissingForContent", "Article has a subtitle but template has no Subtitle style"));
+  if (!template.pageRoles.Cover) diagnostics.push(warning("Template.PageRoleFallback", "Folio will use the first available page as the cover."));
+  if (!template.pageRoles.Article?.flowFrameRef) diagnostics.push(warning("Template.ArticleFlowMissing", "Folio will create an article flow frame in the output copy."));
+  if (!template.styleRoles.ArticleTitle) diagnostics.push(warning("Template.StyleMissing", "Folio will use the cover frame formatting for the title."));
+  if (document.metadata.subtitle && !template.styleRoles.Subtitle) diagnostics.push(warning("Template.StyleMissingForContent", "Folio will use a compatible paragraph style for the subtitle."));
   const blockStyleRoles: Record<string, "SectionHeading" | "Subheading" | "Body" | "Quote" | "InlineImage"> = {};
   const captionStyleRoles: string[] = [];
   const characterStyleRoles: Array<{ blockId: string; runIndex: number; styleRole: "Emphasis" | "Link" | "Code" }> = [];
@@ -28,11 +28,11 @@ export function planDocument(document: SemanticDocument, template: CompiledTempl
           : block.type === "divider" ? undefined
             : "Body";
     if (role) {
-      if (!template.styleRoles[role]) diagnostics.push(error("Template.StyleMissingForContent", "Article block " + block.id + " requires style role " + role));
+      if (!template.styleRoles[role]) diagnostics.push(warning("Template.StyleMissingForContent", "Article block " + block.id + " will use InDesign defaults because style role " + role + " is unavailable."));
       else blockStyleRoles[block.id] = role;
     }
     if (block.type === "image" && block.caption && !template.styleRoles.Caption) {
-      diagnostics.push(error("Template.StyleMissingForContent", "Image block " + block.id + " requires style role Caption"));
+      diagnostics.push(warning("Template.StyleMissingForContent", "Image block " + block.id + " will use a compatible style because Caption is unavailable."));
     }
     if (block.type === "image" && block.caption) captionStyleRoles.push(block.id);
     const runs = block.type === "image" ? block.caption ?? [] : "content" in block ? block.content : [];
@@ -42,23 +42,21 @@ export function planDocument(document: SemanticDocument, template: CompiledTempl
       if (run.marks.includes("link")) roles.push("Link");
       if (run.marks.includes("code")) roles.push("Code");
       for (const styleRole of roles) {
-        if (!template.styleRoles[styleRole]) diagnostics.push(error("Template.StyleMissingForContent", "Text in block " + block.id + " requires style role " + styleRole));
+        if (!template.styleRoles[styleRole]) diagnostics.push(warning("Template.StyleMissingForContent", "Text in block " + block.id + " will keep its content because style role " + styleRole + " is unavailable."));
         else characterStyleRoles.push({ blockId: block.id, runIndex, styleRole });
       }
     });
   }
-  if (diagnostics.length) return { diagnostics };
-
   const pages: DocumentPageIR[] = [
     {
       id: "page-cover",
       role: "Cover",
-      sourcePageRef: template.pageRoles.Cover!.sourcePageRef,
+      sourcePageRef: template.pageRoles.Cover?.sourcePageRef ?? template.pageRoles.Article?.sourcePageRef ?? "",
       stories: [],
       titleStyleRole: "ArticleTitle",
       ...(document.metadata.subtitle ? { subtitleStyleRole: "Subtitle" as const } : {})
     },
-    { id: "page-article-001", role: "Article", sourcePageRef: template.pageRoles.Article!.sourcePageRef, stories: ["main"] }
+    { id: "page-article-001", role: "Article", sourcePageRef: template.pageRoles.Article?.sourcePageRef ?? template.pageRoles.Cover?.sourcePageRef ?? "", stories: ["main"] }
   ];
   if (template.pageRoles.Ending) {
     pages.push({ id: "page-ending", role: "Ending", sourcePageRef: template.pageRoles.Ending.sourcePageRef, stories: [] });
@@ -98,29 +96,29 @@ export function respondToObservation(
   const diagnostics: Diagnostic[] = [];
   const maxPages = options.maxPages ?? 500;
   for (const asset of observation.missingAssets) {
-    diagnostics.push({ code: "Asset.Missing", message: "Asset could not be placed: " + asset, severity: "error", context: { source: asset } });
+    diagnostics.push({ code: "Asset.Missing", message: "Asset could not be placed; Folio inserted a placeholder: " + asset, severity: "warning", context: { source: asset } });
   }
   for (const font of observation.missingFonts) {
     diagnostics.push({ code: "Font.Missing", message: "Font substitution or missing font: " + font, severity: "warning", context: { font } });
   }
-  if (diagnostics.some((item) => item.severity === "error")) {
-    return { ir, diagnostics, addedPages: 0, complete: false };
+  for (const item of observation.warnings ?? []) {
+    diagnostics.push({ ...item, severity: "warning" });
   }
   if (!observation.overset.length) return { ir, diagnostics, addedPages: 0, complete: true };
 
   const mainOverflow = observation.overset.filter((item) => item.storyId === "main");
   if (!mainOverflow.length) {
-    diagnostics.push({ code: "Story.UnexpectedOverset", message: "Host reported overset for an unknown story", severity: "error" });
-    return { ir, diagnostics, addedPages: 0, complete: false };
+    diagnostics.push({ code: "Story.UnexpectedOverset", message: "InDesign reported overflow outside the article story; the generated document may need adjustment.", severity: "warning" });
+    return { ir, diagnostics, addedPages: 0, complete: true };
   }
   const articleRole = template.pageRoles.Article;
   if (!articleRole?.flowFrameRef) {
-    diagnostics.push({ code: "Template.ArticleFlowMissing", message: "Cannot extend the main story because Article flow is unavailable", severity: "error" });
-    return { ir, diagnostics, addedPages: 0, complete: false };
+    diagnostics.push({ code: "Template.ArticleFlowMissing", message: "Article flow could not be extended; the generated document may contain overflow.", severity: "warning" });
+    return { ir, diagnostics, addedPages: 0, complete: true };
   }
   if (ir.pages.length >= maxPages) {
-    diagnostics.push({ code: "Story.PageLimitReached", message: "Reflow reached its page limit of " + maxPages, severity: "error", context: { maxPages } });
-    return { ir, diagnostics, addedPages: 0, complete: false };
+    diagnostics.push({ code: "Story.PageLimitReached", message: "Reflow reached its page limit of " + maxPages + "; the remaining text may overflow.", severity: "warning", context: { maxPages } });
+    return { ir, diagnostics, addedPages: 0, complete: true };
   }
 
   const articlePages = ir.pages.filter((page) => page.role === "Article");
@@ -144,4 +142,8 @@ export function respondToObservation(
 
 function error(code: string, message: string): Diagnostic {
   return { code, message, severity: "error" };
+}
+
+function warning(code: string, message: string): Diagnostic {
+  return { code, message, severity: "warning" };
 }

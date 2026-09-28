@@ -20,6 +20,7 @@ export interface PublishOptions {
 }
 
 export interface PublishResult {
+  status: "complete" | "degraded" | "failed";
   ir?: DocumentIR;
   observation?: HostObservation;
   diagnostics: Diagnostic[];
@@ -32,23 +33,54 @@ export async function publishDocument(
   options: PublishOptions = {}
 ): Promise<PublishResult> {
   const planned = planDocument(input.document, input.template);
-  if (!planned.ir) return { diagnostics: planned.diagnostics, complete: false };
+  if (!planned.ir) return { status: "failed", diagnostics: planned.diagnostics, complete: false };
 
   let ir = planned.ir;
   let diagnostics = [...planned.diagnostics];
-  let observation = await host.render({ ...input, ir, mode: "create" });
+  let observation: HostObservation;
+  try {
+    observation = await host.render({ ...input, ir, mode: "create" });
+  } catch (error) {
+    diagnostics.push(hostFailure(error));
+    return { status: "failed", ir, diagnostics, complete: false };
+  }
   const maxPages = options.maxPages ?? 500;
 
   while (true) {
     const response = respondToObservation(ir, input.template, observation, { maxPages });
     diagnostics = deduplicateDiagnostics([...diagnostics, ...response.diagnostics]);
     ir = response.ir;
-    if (response.complete) return { ir, observation, diagnostics, complete: true };
-    if (!response.addedPages || diagnostics.some((item) => item.severity === "error")) {
-      return { ir, observation, diagnostics, complete: false };
+    if (response.complete) {
+      const failed = diagnostics.some((item) => item.severity === "error");
+      const degraded = diagnostics.some((item) => item.severity === "warning");
+      return {
+        status: failed ? "failed" : degraded ? "degraded" : "complete",
+        ir,
+        observation,
+        diagnostics,
+        complete: !failed
+      };
     }
-    observation = await host.render({ ...input, ir, mode: "appendPages" });
+    if (!response.addedPages || diagnostics.some((item) => item.severity === "error")) {
+      return { status: "failed", ir, observation, diagnostics, complete: false };
+    }
+    try {
+      observation = await host.render({ ...input, ir, mode: "appendPages" });
+    } catch (error) {
+      diagnostics.push(hostFailure(error));
+      return { status: "failed", ir, observation, diagnostics, complete: false };
+    }
   }
+}
+
+function hostFailure(error: unknown): Diagnostic {
+  const details = error instanceof Error ? error.message : String(error);
+  return {
+    code: "Publish.HostOperationFailed",
+    message: details,
+    severity: "error",
+    context: { details }
+  };
 }
 
 function deduplicateDiagnostics(diagnostics: Diagnostic[]): Diagnostic[] {

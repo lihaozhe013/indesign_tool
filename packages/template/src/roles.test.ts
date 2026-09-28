@@ -60,7 +60,7 @@ describe("deriveRoleAssignments", () => {
     const inventory = createTemplateInventory(buildScan(), result.assignments!);
     expect(inventory.diagnostics).toEqual([]);
     const compiled = compileTemplate(inventory.inventory!);
-    expect(compiled.diagnostics).toEqual([]);
+    expect(compiled.diagnostics.every((item) => item.severity !== "error")).toBe(true);
     expect(compiled.template?.pageRoles.Article).toEqual({ sourcePageRef: "page:2", flowFrameRef: "frame:flow" });
     expect(compiled.template?.styleRoles).toMatchObject({
       ArticleTitle: "Article / H1",

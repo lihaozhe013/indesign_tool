@@ -2,7 +2,6 @@ const inDesign = require("indesign");
 const app = inDesign.app;
 const ROLE_KEY = "com.publisher.role";
 const PAGE_KEY = "com.publisher.documentPageId";
-const BLOCK_KEY = "com.publisher.blockId";
 
 function items(collection) {
   const result = [];
@@ -37,7 +36,8 @@ function label(object, key) {
 }
 
 function bounds(object) {
-  const value = read(function () { return object.geometricBounds; }, null);
+  const value = read(function () { return object.geometricBounds; }, null)
+    || read(function () { return object.bounds; }, null);
   if (!value || value.length !== 4) return undefined;
   const result = [];
   for (let index = 0; index < 4; index += 1) {
@@ -225,19 +225,128 @@ function pageForSource(document, sourceRef) {
   throw new Error("Unsupported template page reference: " + sourceRef);
 }
 
-function frameForPage(document, frameRef, page, requiredRole) {
-  const pageFrames = items(page.pageItems);
-  for (let index = 0; index < pageFrames.length; index += 1) {
-    if (requiredRole && roleLabel(pageFrames[index]) === requiredRole) return pageFrames[index];
-    if (Number(read(function () { return pageFrames[index].id; }, -1)) === idFromRef(frameRef)) return pageFrames[index];
+function createFallbackFrame(page, role, kind, sourceFrame) {
+  const pageBounds = bounds(page);
+  if (!pageBounds) throw new Error("InDesign could not read page geometry for a fallback frame.");
+  const top = pageBounds[0];
+  const left = pageBounds[1];
+  const height = pageBounds[2] - pageBounds[0];
+  const width = pageBounds[3] - pageBounds[1];
+  let frameBounds;
+  if (sourceFrame) {
+    const sourceBounds = bounds(sourceFrame);
+    const sourcePage = read(function () { return sourceFrame.parentPage; }, null);
+    const sourcePageBounds = sourcePage ? bounds(sourcePage) : null;
+    if (sourceBounds && sourcePageBounds) {
+      frameBounds = [
+        top + sourceBounds[0] - sourcePageBounds[0],
+        left + sourceBounds[1] - sourcePageBounds[1],
+        top + sourceBounds[2] - sourcePageBounds[0],
+        left + sourceBounds[3] - sourcePageBounds[1]
+      ];
+    }
   }
-  const masterFrame = findById(document.allPageItems, idFromRef(frameRef));
-  if (!masterFrame) throw new Error("Template frame no longer exists: " + frameRef);
-  const overridden = read(function () { return masterFrame.override(page); }, null);
-  if (overridden) return overridden;
-  const roleMatches = items(page.textFrames).filter(function (frame) { return requiredRole && roleLabel(frame) === requiredRole; });
-  if (roleMatches.length === 1) return roleMatches[0];
-  throw new Error("Could not copy the labeled frame onto page " + String(page.name));
+  if (!frameBounds && role === "hero-title") {
+    frameBounds = [top + height * 0.2, left + width * 0.1, top + height * 0.38, left + width * 0.9];
+  } else if (!frameBounds && role === "hero-subtitle") {
+    frameBounds = [top + height * 0.4, left + width * 0.1, top + height * 0.5, left + width * 0.9];
+  } else if (!frameBounds) {
+    frameBounds = [top + height * 0.08, left + width * 0.08, top + height * 0.92, left + width * 0.92];
+  }
+  const textFrame = kind !== "graphic";
+  const frame = textFrame
+    ? page.textFrames.add({ geometricBounds: frameBounds })
+    : page.rectangles.add({ geometricBounds: frameBounds });
+  frame.name = "Folio " + role;
+  frame.insertLabel(ROLE_KEY, role);
+  return frame;
+}
+
+function frameWithRole(frame, role) {
+  if (frame && role) frame.insertLabel(ROLE_KEY, role);
+  return frame;
+}
+
+function concreteFrames(page, kind) {
+  const names = kind === "text" ? ["textFrames"] : ["rectangles", "ovals", "polygons"];
+  const frames = [];
+  names.forEach(function (name) {
+    const collection = read(function () { return page[name]; }, null);
+    if (!collection) return;
+    items(collection).forEach(function (frame) {
+      if (!frames.some(function (candidate) { return Number(candidate.id) === Number(frame.id); })) frames.push(frame);
+    });
+  });
+  if (!frames.length && kind !== "text") return items(page.pageItems);
+  return frames;
+}
+
+function frameForPage(document, frameRef, page, requiredRole, warnings) {
+  if (requiredRole && (!frameRef || frameRef.indexOf("$auto:") === 0)) {
+    return createFallbackFrame(page, requiredRole, requiredRole === "hero-image" ? "graphic" : "text");
+  }
+  const expectedKind = requiredRole === "hero-image" ? "graphic" : "text";
+  const pageFrames = concreteFrames(page, expectedKind);
+  for (let index = 0; index < pageFrames.length; index += 1) {
+    if (frameRef && Number(read(function () { return pageFrames[index].id; }, -1)) === idFromRef(frameRef)) return frameWithRole(pageFrames[index], requiredRole);
+  }
+  const masterFrame = frameRef ? findById(document.allPageItems, idFromRef(frameRef)) : null;
+  if (masterFrame) {
+    const parentPage = read(function () { return masterFrame.parentPage; }, null);
+    const masterPageIds = [];
+    items(document.masterSpreads).forEach(function (spread) {
+      items(spread.pages).forEach(function (masterPage) { masterPageIds.push(Number(masterPage.id)); });
+    });
+    if (parentPage && masterPageIds.indexOf(Number(parentPage.id)) >= 0) {
+      const overridden = read(function () { return masterFrame.override(page); }, null);
+      if (overridden) {
+        const overrideId = Number(read(function () { return overridden.id; }, -1));
+        const concreteOverride = concreteFrames(page, expectedKind).find(function (candidate) {
+          return Number(read(function () { return candidate.id; }, -2)) === overrideId;
+        });
+        if (concreteOverride) return frameWithRole(concreteOverride, requiredRole);
+      }
+    }
+    const sourceName = String(read(function () { return masterFrame.name; }, ""));
+    const sameNamed = pageFrames.filter(function (candidate) {
+      return String(read(function () { return candidate.name; }, "")) === sourceName
+        && (typeof read(function () { return candidate.contents; }, undefined) === "string")
+          === (typeof read(function () { return masterFrame.contents; }, undefined) === "string");
+    });
+    if (sameNamed.length) return frameWithRole(sameNamed[0], requiredRole);
+    const sourceBounds = bounds(masterFrame);
+    const pageBounds = bounds(page);
+    const sourcePageBounds = parentPage ? bounds(parentPage) : null;
+    if (sourceBounds && pageBounds && sourcePageBounds) {
+      const expected = [
+        pageBounds[0] + sourceBounds[0] - sourcePageBounds[0],
+        pageBounds[1] + sourceBounds[1] - sourcePageBounds[1],
+        pageBounds[0] + sourceBounds[2] - sourcePageBounds[0],
+        pageBounds[1] + sourceBounds[3] - sourcePageBounds[1]
+      ];
+      const similar = pageFrames.map(function (candidate) {
+        const candidateBounds = bounds(candidate);
+        if (!candidateBounds) return { candidate: candidate, delta: Infinity };
+        let delta = 0;
+        for (let index = 0; index < 4; index += 1) delta += Math.abs(candidateBounds[index] - expected[index]);
+        return { candidate: candidate, delta: delta };
+      }).sort(function (left, right) { return left.delta - right.delta; });
+      if (similar.length && similar[0].delta < 8) return frameWithRole(similar[0].candidate, requiredRole);
+    }
+  }
+  const roleMatches = concreteFrames(page, expectedKind).filter(function (frame) { return requiredRole && roleLabel(frame) === requiredRole; });
+  if (roleMatches.length === 1) return frameWithRole(roleMatches[0], requiredRole);
+  if (frameRef && frameRef.indexOf("$auto:") !== 0) {
+    warnings.push({
+      code: "Template.FallbackFrameCreated",
+      message: "The selected " + requiredRole + " frame could not be used; Folio created a replacement in the output copy.",
+      severity: "warning",
+      path: "frameRoles." + requiredRole,
+      context: { role: requiredRole, source: frameRef }
+    });
+  }
+  if (requiredRole === "hero-image") return null;
+  return createFallbackFrame(page, requiredRole || "article-flow", "text", masterFrame);
 }
 
 function styleByQualifiedName(document, kind, qualifiedName) {
@@ -254,6 +363,13 @@ function applyParagraphStyle(paragraph, style) {
   paragraph.applyParagraphStyle(style, true);
 }
 
+function placedLinkIsUsable(placedItem) {
+  const link = read(function () { return placedItem.itemLink; }, null);
+  if (!link) return true;
+  const status = String(read(function () { return link.status; }, "UNKNOWN"));
+  return status === "NORMAL" || status === "LINK_OUT_OF_DATE";
+}
+
 function pageBySemanticId(document, id) {
   return items(document.pages).find(function (page) { return label(page, PAGE_KEY) === id; }) || null;
 }
@@ -268,6 +384,10 @@ function addArticlePage(document, prototype, flowFrameRef, endingPage) {
   page.insertLabel(ROLE_KEY, "Article");
   const parent = read(function () { return prototype.appliedMaster; }, null);
   if (parent) page.appliedMaster = parent;
+  if (!flowFrameRef || flowFrameRef.indexOf("$auto:") === 0) {
+    const fallbackFrame = createFallbackFrame(page, "article-flow", "text");
+    return { page: page, frame: fallbackFrame };
+  }
   const flowSource = findById(document.allPageItems, idFromRef(flowFrameRef));
   if (!flowSource) throw new Error("Article flow frame no longer exists: " + flowFrameRef);
   const parentPage = read(function () { return flowSource.parentPage; }, null);
@@ -297,29 +417,46 @@ function addArticlePage(document, prototype, flowFrameRef, endingPage) {
   return { page: page, frame: copy };
 }
 
-function setCoverText(document, template, coverPage, documentData) {
+function setCoverText(document, template, coverPage, documentData, warnings) {
   const titleRef = template.frameRoles["hero-title"];
-  if (!titleRef) throw new Error("Labeled template frame role is required: hero-title");
-  const titleFrame = frameForPage(document, titleRef, coverPage, "hero-title");
+  const titleFrame = frameForPage(document, titleRef, coverPage, "hero-title", warnings);
   titleFrame.contents = documentData.metadata.title;
   const titleStyle = template.styleRoles.ArticleTitle;
-  if (titleStyle) applyParagraphStyle(titleFrame.parentStory.paragraphs.item(0), styleByQualifiedName(document, "paragraph", titleStyle));
+  if (titleStyle) {
+    try { applyParagraphStyle(titleFrame.parentStory.paragraphs.item(0), styleByQualifiedName(document, "paragraph", titleStyle)); }
+    catch (_error) {
+      const details = String(_error && _error.message ? _error.message : _error);
+      warnings.push({ code: "Template.StyleApplyFailed", message: "Cover title style could not be applied: " + titleStyle + ". " + details, severity: "warning", context: { role: "ArticleTitle", style: titleStyle, details: details } });
+    }
+  }
 
   if (documentData.metadata.subtitle) {
     const subtitleRef = template.frameRoles["hero-subtitle"];
-    if (!subtitleRef) throw new Error("The template needs a frame labeled hero-subtitle for this article.");
-    const subtitleFrame = frameForPage(document, subtitleRef, coverPage, "hero-subtitle");
+    const subtitleFrame = frameForPage(document, subtitleRef, coverPage, "hero-subtitle", warnings);
     subtitleFrame.contents = documentData.metadata.subtitle;
-    if (template.styleRoles.Subtitle) applyParagraphStyle(subtitleFrame.parentStory.paragraphs.item(0), styleByQualifiedName(document, "paragraph", template.styleRoles.Subtitle));
+    if (template.styleRoles.Subtitle) {
+      try { applyParagraphStyle(subtitleFrame.parentStory.paragraphs.item(0), styleByQualifiedName(document, "paragraph", template.styleRoles.Subtitle)); }
+      catch (_error) {
+        const details = String(_error && _error.message ? _error.message : _error);
+        warnings.push({ code: "Template.StyleApplyFailed", message: "Cover subtitle style could not be applied: " + template.styleRoles.Subtitle + ". " + details, severity: "warning", context: { role: "Subtitle", style: template.styleRoles.Subtitle, details: details } });
+      }
+    }
   }
 }
 
-function setCoverImage(document, template, coverPage, documentData) {
+function setCoverImage(document, template, coverPage, documentData, warnings) {
   const imageBlock = documentData.blocks.find(function (block) { return block.type === "image"; });
   const imageRef = template.frameRoles["hero-image"];
   if (!imageBlock || !imageRef) return null;
-  const frame = frameForPage(document, imageRef, coverPage, "hero-image");
-  if (template.styleRoles.HeroImage) frame.applyObjectStyle(styleByQualifiedName(document, "object", template.styleRoles.HeroImage), true);
+  const frame = frameForPage(document, imageRef, coverPage, "hero-image", warnings);
+  if (!frame) return imageBlock.src;
+  if (template.styleRoles.HeroImage) {
+    try { frame.applyObjectStyle(styleByQualifiedName(document, "object", template.styleRoles.HeroImage), true); }
+    catch (_error) {
+      const details = String(_error && _error.message ? _error.message : _error);
+      warnings.push({ code: "Template.StyleApplyFailed", message: "Cover image style could not be applied: " + template.styleRoles.HeroImage + ". " + details, severity: "warning", context: { role: "HeroImage", style: template.styleRoles.HeroImage, details: details } });
+    }
+  }
   let placed;
   try {
     placed = items(frame.place(imageBlock.src));
@@ -329,6 +466,7 @@ function setCoverImage(document, template, coverPage, documentData) {
   if (!placed.length) {
     return imageBlock.src;
   }
+  if (!placedLinkIsUsable(placed[0])) return imageBlock.src;
   if (inDesign.FitOptions) frame.fit(inDesign.FitOptions.PROPORTIONALLY);
   frame.insertLabel("com.publisher.alt", imageBlock.alt || "");
   return null;
@@ -346,11 +484,19 @@ function materialize(document, payload, allowImages) {
   const articlePrototype = pageForSource(document, firstArticle.sourcePageRef);
 
   const missingAssets = [];
+  const warnings = [];
+  const missingImageBlocks = {};
   if (payload.mode === "create") {
     const selectedPageIds = {};
+    const coverPlan = ir.pages.find(function (page) { return page.role === "Cover"; });
+    const coverSource = coverPlan ? pageForSource(document, coverPlan.sourcePageRef) : null;
     ir.pages.forEach(function (page) {
       if (page.role === "Article" && page.id !== firstArticle.id) return;
-      const source = pageForSource(document, page.sourcePageRef);
+      let source = pageForSource(document, page.sourcePageRef);
+      if (page.role === "Article" && coverSource && Number(coverSource.id) === Number(source.id)) {
+        source = source.duplicate();
+        source.insertLabel(ROLE_KEY, "Article");
+      }
       pages.push({ plan: page, page: source });
       selectedPageIds[String(source.id)] = true;
     });
@@ -359,6 +505,13 @@ function materialize(document, payload, allowImages) {
       if (!selectedPageIds[String(originalPages[index].id)]) originalPages[index].remove();
     }
     pages.forEach(function (entry) { entry.page.insertLabel(PAGE_KEY, entry.plan.id); });
+    for (let index = pages.length - 1; index >= 0; index -= 1) {
+      const firstPage = document.pages.item(0);
+      if (Number(firstPage.id) !== Number(pages[index].page.id)) {
+        try { pages[index].page.move(inDesign.LocationOptions.BEFORE, firstPage); }
+        catch (_error) { warnings.push({ code: "Template.PageOrderChanged", message: "Folio could not move a selected page into the planned output order.", severity: "warning" }); }
+      }
+    }
   } else {
     ir.pages.forEach(function (plannedPage) {
       const existing = pageBySemanticId(document, plannedPage.id);
@@ -383,8 +536,8 @@ function materialize(document, payload, allowImages) {
   const coverEntry = pages.find(function (entry) { return entry.plan.role === "Cover"; });
   if (!coverEntry) throw new Error("The publishing plan has no Cover page.");
   if (payload.mode === "create") {
-    setCoverText(document, template, coverEntry.page, documentData);
-    const missingCoverImage = setCoverImage(document, template, coverEntry.page, documentData);
+    setCoverText(document, template, coverEntry.page, documentData, warnings);
+    const missingCoverImage = setCoverImage(document, template, coverEntry.page, documentData, warnings);
     if (missingCoverImage) missingAssets.push(missingCoverImage);
   }
 
@@ -394,7 +547,7 @@ function materialize(document, payload, allowImages) {
     if (!pageEntry) throw new Error("Article page is missing from the generated document: " + articlePageIds[index]);
     const flowRef = template.pageRoles.Article.flowFrameRef;
     if (!flowRef) throw new Error("Template has no labeled article flow frame.");
-    articleFrames.push(frameForPage(document, flowRef, pageEntry.page, "article-flow"));
+    articleFrames.push(frameForPage(document, flowRef, pageEntry.page, "article-flow", warnings));
   }
   for (let index = 0; index < articleFrames.length - 1; index += 1) articleFrames[index].nextTextFrame = articleFrames[index + 1];
 
@@ -404,23 +557,28 @@ function materialize(document, payload, allowImages) {
     const textOperation = operations.find(function (operation) { return operation.op === "set-story-text"; });
     if (!textOperation) throw new Error("Host plan has no main story text operation.");
     articleFrames[0].contents = textOperation.text;
-    if (String(story.contents) !== textOperation.text) throw new Error("InDesign did not preserve the complete article text.");
-
-    const storyPlan = payload.story;
-    if (storyPlan && Array.isArray(storyPlan.paragraphs)) {
-      storyPlan.paragraphs.forEach(function (plannedParagraph, index) {
-        if (story.paragraphs.length > index) story.paragraphs.item(index).insertLabel(BLOCK_KEY, plannedParagraph.blockId);
-      });
+    if (textOperation.text.length && String(story.contents).indexOf(textOperation.text.slice(0, 24)) < 0) {
+      warnings.push({ code: "Document.TextChanged", message: "Article text could not be fully verified during composition.", severity: "warning" });
     }
+
     operations.filter(function (operation) { return operation.op === "apply-paragraph-style"; }).forEach(function (operation) {
       const paragraph = story.paragraphs.item(operation.paragraphIndex);
-      applyParagraphStyle(paragraph, styleByQualifiedName(document, "paragraph", operation.styleName));
-      paragraph.insertLabel(BLOCK_KEY, operation.blockId);
+      try {
+        applyParagraphStyle(paragraph, styleByQualifiedName(document, "paragraph", operation.styleName));
+      } catch (_error) {
+        const details = String(_error && _error.message ? _error.message : _error);
+        warnings.push({ code: "Template.StyleApplyFailed", message: "Paragraph style could not be applied: " + operation.styleName + ". " + details, severity: "warning", context: { role: operation.styleName, style: operation.styleName, details: details } });
+      }
     });
     operations.filter(function (operation) { return operation.op === "apply-character-style"; }).forEach(function (operation) {
       const paragraph = story.paragraphs.item(operation.paragraphIndex);
-      const style = styleByQualifiedName(document, "character", operation.styleName);
-      for (let index = operation.start; index < operation.end; index += 1) paragraph.characters.item(index).applyCharacterStyle(style);
+      try {
+        const style = styleByQualifiedName(document, "character", operation.styleName);
+        for (let index = operation.start; index < operation.end; index += 1) paragraph.characters.item(index).applyCharacterStyle(style);
+      } catch (_error) {
+        const details = String(_error && _error.message ? _error.message : _error);
+        warnings.push({ code: "Template.StyleApplyFailed", message: "Character style could not be applied: " + operation.styleName + ". " + details, severity: "warning", context: { role: operation.styleName, style: operation.styleName, details: details } });
+      }
     });
     if (allowImages) {
       operations.filter(function (operation) { return operation.op === "place-inline-image"; }).forEach(function (operation) {
@@ -430,20 +588,59 @@ function materialize(document, payload, allowImages) {
           placed = items(anchorPoint.place(operation.source));
         } catch (_error) {
           missingAssets.push(operation.source);
+          missingImageBlocks[operation.blockId] = true;
           return;
         }
         if (!placed.length) {
           missingAssets.push(operation.source);
+          missingImageBlocks[operation.blockId] = true;
+          return;
+        }
+        if (!placedLinkIsUsable(placed[0])) {
+          try { placed[0].remove(); } catch (_error) { }
+          missingAssets.push(operation.source);
+          missingImageBlocks[operation.blockId] = true;
           return;
         }
         const candidates = [placed[0], read(function () { return placed[0].parent; }, null)].filter(Boolean);
         const styleFrame = candidates.find(function (candidate) { return typeof candidate.applyObjectStyle === "function"; });
         if (operation.objectStyleName) {
-          if (!styleFrame) throw new Error("InDesign placed an inline image without an object-style-capable frame.");
-          styleFrame.applyObjectStyle(styleByQualifiedName(document, "object", operation.objectStyleName), true);
+          if (styleFrame) {
+            try { styleFrame.applyObjectStyle(styleByQualifiedName(document, "object", operation.objectStyleName), true); }
+            catch (_error) {
+              const details = String(_error && _error.message ? _error.message : _error);
+              warnings.push({ code: "Template.StyleApplyFailed", message: "Inline image style could not be applied: " + operation.objectStyleName + ". " + details, severity: "warning", context: { role: "InlineImage", style: operation.objectStyleName, details: details } });
+            }
+          } else {
+            warnings.push({ code: "Template.StyleApplyFailed", message: "Inline image style was skipped because InDesign did not expose a frame.", severity: "warning" });
+          }
         }
         const fitFrame = candidates.find(function (candidate) { return typeof candidate.fit === "function"; });
         if (fitFrame && inDesign.FitOptions) fitFrame.fit(inDesign.FitOptions.PROPORTIONALLY);
+      });
+      operations.filter(function (operation) { return operation.op === "place-image-placeholder"; }).forEach(function (operation) {
+        if (!missingImageBlocks[operation.blockId]) return;
+        try {
+          const insertionPoint = story.paragraphs.item(operation.paragraphIndex).insertionPoints.item(0);
+          const pageBounds = read(function () { return articleFrames[0].parentPage.bounds; }, null) || [0, 0, 800, 600];
+          const pageHeight = pageBounds[2] - pageBounds[0];
+          const pageWidth = pageBounds[3] - pageBounds[1];
+          const placeholder = insertionPoint.textFrames.add({ geometricBounds: [
+            pageBounds[0] + pageHeight * 0.12,
+            pageBounds[1] + pageWidth * 0.1,
+            pageBounds[0] + pageHeight * 0.28,
+            pageBounds[1] + pageWidth * 0.9
+          ] });
+          const filename = String(operation.source).split(/[\\/]/).pop() || String(operation.source);
+          const altText = operation.alt ? "\n" + String(operation.alt) : "";
+          placeholder.contents = "图片缺失：" + filename + altText;
+          placeholder.anchoredObjectSettings.anchoredPosition = inDesign.AnchorPosition.INLINE_POSITION;
+          placeholder.strokeWeight = 1.5;
+          placeholder.name = "Folio missing image - " + filename;
+          placeholder.insertLabel("com.publisher.imagePlaceholder", operation.blockId);
+        } catch (_error) {
+          warnings.push({ code: "Asset.PlaceholderFailed", message: "InDesign could not create the inline missing-image frame for " + operation.source, severity: "warning", context: { source: operation.source } });
+        }
       });
     }
   }
@@ -452,7 +649,7 @@ function materialize(document, payload, allowImages) {
   const mainStory = articleFrames[0].parentStory;
   const textOperation = operations.find(function (operation) { return operation.op === "set-story-text"; });
   if (payload.mode === "appendPages" && textOperation && String(mainStory.contents).indexOf(textOperation.text.slice(0, 32)) < 0) {
-    throw new Error("The saved article text could not be found after reopening the generated document.");
+    warnings.push({ code: "Document.TextChanged", message: "The saved article text could not be fully verified after reopening.", severity: "warning" });
   }
   const storyPlan = payload.story;
   for (let index = 0; storyPlan && index < storyPlan.paragraphs.length; index += 1) {
@@ -461,13 +658,13 @@ function materialize(document, payload, allowImages) {
     const hasImage = operations.some(function (operation) { return operation.op === "place-inline-image" && operation.paragraphIndex === index; });
     if (hasImage) continue;
     if (expected && String(paragraph.contents).replace(/\r$/, "") !== expected) {
-      throw new Error("InDesign changed article text in paragraph " + String(index + 1) + ".");
+      warnings.push({ code: "Document.TextChanged", message: "Text differs from the source in paragraph " + String(index + 1) + ".", severity: "warning", path: "paragraphs." + String(index + 1) });
     }
   }
-  return { articleFrames: articleFrames, story: mainStory, missingAssets: missingAssets };
+  return { articleFrames: articleFrames, story: mainStory, missingAssets: missingAssets, warnings: warnings };
 }
 
-function observation(document, story, template, renderMissingAssets) {
+function observation(document, story, template, renderMissingAssets, renderWarnings) {
   const articlePages = items(document.pages).filter(function (page) {
     const id = label(page, PAGE_KEY);
     return id && id.indexOf("page-article-") === 0;
@@ -481,7 +678,7 @@ function observation(document, story, template, renderMissingAssets) {
       frameRef: template.pageRoles.Article.flowFrameRef
     });
   }
-  const missingAssets = renderMissingAssets.slice();
+  const missingAssets = Array.from(new Set(renderMissingAssets));
   items(document.links).forEach(function (link) {
     const status = String(read(function () { return link.status; }, "UNKNOWN"));
     if (status !== "NORMAL" && status !== "LINK_OUT_OF_DATE") {
@@ -491,7 +688,7 @@ function observation(document, story, template, renderMissingAssets) {
   const missingFonts = items(document.fonts).filter(function (font) {
     return String(read(function () { return font.status; }, "UNKNOWN")) !== "INSTALLED";
   }).map(function (font) { return String(read(function () { return font.name; }, "Unknown font")); });
-  return { pageCount: document.pages.length, overset: overset, missingAssets: missingAssets, missingFonts: missingFonts };
+  return { pageCount: document.pages.length, overset: overset, missingAssets: Array.from(new Set(missingAssets)), missingFonts: missingFonts, warnings: renderWarnings || [] };
 }
 
 function documentDump(document) {
@@ -510,10 +707,8 @@ function documentDump(document) {
         id: String(read(function () { return story.id; }, "unknown")),
         overset: Boolean(read(function () { return story.overflows; }, false)),
         paragraphs: items(story.paragraphs).map(function (paragraph) {
-          const blockId = label(paragraph, BLOCK_KEY);
           const style = String(read(function () { return paragraph.appliedParagraphStyle.name; }, ""));
           const result = { text: String(read(function () { return paragraph.contents; }, "")).replace(/\r$/, "") };
-          if (blockId) result.semanticId = blockId;
           if (style) result.style = style;
           return result;
         })
@@ -526,6 +721,8 @@ function documentDump(document) {
       const result = { semanticRole: roleLabel(frame) };
       if (pageIndex >= 0) result.pageIndex = pageIndex;
       if (boundsValue) result.bounds = boundsValue;
+      const story = read(function () { return frame.parentStory; }, null);
+      if (story) result.storyId = String(read(function () { return story.id; }, ""));
       const frameText = String(read(function () { return frame.contents; }, ""));
       if (frameText) result.text = frameText;
       const previous = read(function () { return frame.previousTextFrame; }, null);
@@ -565,7 +762,7 @@ async function execute(job) {
       if (payload.mode === "create") await Promise.resolve(document.save(payload.outputPath));
       const materialized = materialize(document, payload, true);
       await Promise.resolve(document.save());
-      return { observation: observation(document, materialized.story, payload.template, materialized.missingAssets) };
+      return { observation: observation(document, materialized.story, payload.template, materialized.missingAssets, materialized.warnings) };
     } finally {
       await Promise.resolve(document.close(inDesign.SaveOptions.NO));
     }

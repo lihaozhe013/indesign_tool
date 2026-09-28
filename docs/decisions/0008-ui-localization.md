@@ -27,7 +27,7 @@ Localize the interface layer only, for `en` and `zh-Hans`, using `i18next` and `
 
 **Rust owns the locale preference; the WebView owns the rendered language.** The stored preference lives in `settings.json` through `tauri-plugin-store` on the Rust side, and the language check items are native View menu items. Rust persists the choice, moves the checkmark, and notifies the WebView with a `locale-changed` event. The sidebar switch and the menu item are two controls for the same single-writer path. A stored preference wins, then the browser language list, then English; on a first run the WebView writes its resolved value back so the menu matches. The event name is duplicated across the language boundary and a test asserts the two declarations agree.
 
-Only the interface layer is localized. Diagnostic text, Rust command errors, and UXP host errors stay English. This is a deliberate boundary, not an oversight. If these are localized later, the correct route is to keep the English message in the contract and map `Diagnostic.code` to a catalog entry in the desktop package, rather than making `core` or `template` depend on a translation catalog.
+The interface layer and recognized diagnostic codes are localized at the desktop boundary. Diagnostic source messages, Rust command errors, and raw UXP host errors remain English so shared packages stay independent from locale catalogs. The desktop maps stable `Diagnostic.code` values to catalog entries and uses the original English message when no mapping exists. The Chinese publication report uses the same mapping with a Chinese explanation fallback.
 
 The Folio product name, the InDesign product name, the Markdown format name, and the native bundle and window titles are never translated.
 
@@ -44,7 +44,7 @@ Rust owning the preference follows the existing split where Rust owns local file
 - The desktop package gains `i18next` and `react-i18next` as runtime dependencies, and `tauri-plugin-store` as a Rust-only dependency. There is no JavaScript store client, so the capability file grants only `core:default`.
 - `src-tauri/src/locale.rs` owns the supported locale list, which now exists in both Rust and TypeScript. Rust is authoritative for storage and the menu; TypeScript is authoritative for what the WebView renders.
 - The View menu extends the Tauri default menu and is looked up by title, so a change to the default menu layout would break `attach_menu_items`.
-- A Chinese interface is mixed-language: the preflight diagnostics list and any Rust or host failure still render English text.
+- Unknown diagnostic codes and raw Rust or host failures may include English details in the Chinese interface.
 - `index.html` and the Tauri window title are static English; only `document.title` is reassigned from the catalog after startup.
 - A new language is a new JSON file, a new entry in `supportedLocales`, and a matching branch in the Rust locale module.
 - Traditional Chinese is not supported. It resolves to English rather than to simplified text, which would be wrong.
