@@ -4,7 +4,7 @@
 
 Folio is a local macOS app built with Tauri 2, React, TypeScript, and Rust. The user works in a WebView. Rust owns local file dialogs, Markdown writes, asset checks, staged output, and the InDesign process bridge. The UXP `.idjs` script owns all InDesign DOM calls. The existing CLI remains an offline developer interface.
 
-The product supports InDesign 2026 and uses automatic fuzzy role inference for local `.indd` templates. Existing semantic labels under `com.publisher.role` are a high-confidence compatibility signal, not a prerequisite. A generated document is saved as a new output; the selected template is never used as the output path. Local builds produce an ad-hoc signed macOS `.app`; DMG packaging and Apple Developer ID distribution are deferred. See [ADR 0009](decisions/0009-tolerant-template-resolution.md).
+The product supports InDesign 2026 and uses automatic fuzzy role inference for local `.indd` templates. Existing semantic labels under `com.publisher.role` are a high-confidence compatibility signal, not a prerequisite. A generated document is saved as a new output; the selected template is never used as the output path. Local Apple Silicon builds produce an ad-hoc signed `.app` and a Tauri DMG installer. Developer ID signing and notarization for external distribution remain deferred. See [ADR 0009](decisions/0009-tolerant-template-resolution.md).
 
 ## Package boundaries
 

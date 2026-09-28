@@ -4,6 +4,12 @@ Folio 是一个 macOS 桌面排版工具。你在 Folio 中编写 Markdown、选
 
 在 Folio 菜单栏选择 **Help > 使用手册 / User Manual**，可以打开本手册的 GitHub 页面。
 
+## 安装 Folio
+
+打开项目生成的 DMG，将 Folio 图标拖到“应用程序”文件夹，然后从“应用程序”启动 Folio。首次让 Folio 控制 InDesign 时，请在 macOS 提示中允许自动化控制。
+
+本地构建使用临时签名。若 macOS 阻止从下载或传输文件打开 Folio，请按系统提示在“隐私与安全性”中允许打开。
+
 ## 使用前准备
 
 - macOS，以及已安装并能正常启动的 Adobe InDesign 2026。

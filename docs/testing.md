@@ -17,7 +17,15 @@ The desktop build checks Vite output, Tauri configuration, the macOS bundle meta
 codesign --verify --deep --strict "packages/desktop/src-tauri/target/release/bundle/macos/Folio.app"
 ```
 
-The local build uses an ad-hoc signature; it does not prove that InDesign accepts a job or that a real template composes correctly.
+The local build creates an ad-hoc signed `.app` and a DMG under `packages/desktop/src-tauri/target/release/bundle/dmg/`. Verify the DMG and inspect its installer contents:
+
+```bash
+hdiutil verify packages/desktop/src-tauri/target/release/bundle/dmg/*.dmg
+```
+
+Mount the DMG in Finder and confirm it contains `Folio.app` and the Applications folder alias. Copy Folio to Applications, launch the installed app, and verify its `Info.plist` contains `NSAppleEventsUsageDescription`. Exercise the first InDesign Automation permission flow when the macOS privacy state allows it; if the app is already authorized, verify the host version appears instead of resetting privacy permissions.
+
+This local ad-hoc build does not include Developer ID signing or notarization. A successful build does not prove that InDesign accepts a job or that a real template composes correctly.
 
 ## InDesign host lane
 
