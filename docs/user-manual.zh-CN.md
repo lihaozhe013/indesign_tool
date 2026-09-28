@@ -71,64 +71,85 @@ subtitle: "一段关于归航的短记"
 - 表格、列表、代码块、内嵌在文字中的图片、多段落引用目前不支持，会在预检中报错。引用块目前只支持一段文字。
 - `author` 和 `language` 可以被解析，但当前版本不会将它们排进页面。
 
-## 制作 InDesign 模板
+## 给设计师的 InDesign 模板制作与交付说明
 
-### 角色标签如何工作
+本节可以直接发给设计师。按下面的做法交付一个 `.indd` 模板文件，Folio 才能把不同文章自动排进同一套版式。设计师只需使用 InDesign，不需要了解程序；文中提供的脚本只需原样复制、保存并运行。
 
-Folio 读取 InDesign 文档内的脚本标签键 `com.publisher.role`。标签值用于告诉 Folio 某个页面、文本框或样式承担什么作用，例如 `Cover` 或 `article-flow`。角色名称和大小写必须完全一致。
+### 先理解：哪些内容会被替换
 
-InDesign 的 **Window > Utilities > Script Label** 面板写入的是页面对象的普通 `label` 字段，并不能代替本手册使用的带命名空间标签。请用下面的 UXP `.idjs` 脚本写入角色标签。脚本标签保存在 `.indd` 内，保存并关闭文档后仍会保留。
+把模板想成一份已经设计好、但尚未填入正式文章的 InDesign 文档：
 
-### 示例模板的组成
+- **固定内容**是底色、线条、页眉、页码、品牌标识等。它们会随版式保留，不由 Folio 改写。
+- **可变内容**是每篇文章的标题、副标题、正文和图片。设计师给这些内容留出框，Folio 发布时会把实际内容放进去。
+- **占位框**就是预留位置的 InDesign 文本框或图片框。它不是要在页面上印出“标题占位符”这几个字。例如封面留一个空文本框，Folio 会把文章标题填进这个框。可以暂时输入样稿查看效果，但交付前要清空。
+- **样式**是 InDesign 中保存的一套文字或图片外观设置。Folio 负责选择合适的样式，字号、字体、颜色、段前段后距离等由设计师设定。
 
-以下示例按 A4 竖版、两页文档制作：
+Folio 需要识别这些框和样式，因此每个关键对象有两种名称：一是在 InDesign 图层面板中看到的**对象名称**，供下面的脚本定位；二是保存在 `.indd` 内、平时看不到的**角色标签**，供 Folio 识别。例如对象名称 `Hero Title` 对应角色 `hero-title`。大小写、空格和连字符都要照表填写。
 
-| 页面或对象 | 设计内容 | 角色标签 | 必需程度 |
+### 开工前与委托方确认
+
+确认成品尺寸、横竖版、是否需要出血、品牌颜色、封面是否用图、正文是否需要页码，以及预期的最长标题和副标题。请拿一篇真实文章和至少一张真实尺寸的图片试排。下面以 **A4 竖版、两页起稿、无对页** 为操作示例；尺寸和视觉风格可以改，角色结构不要改。
+
+本指南的交付目标涵盖标题、副标题、正文层级、引用、强调、链接、行内代码和带说明的图片。即使某篇文章暂时不用其中一种内容，也把相应样式建好，后续文章才能直接套用。Folio 当前只处理这里说明的文章结构；不要把列表、表格、复杂多栏流程或其他自动填充区域作为交付前提。
+
+### 模板中必须准备的页面和框
+
+请从一份新的或确认没有旧 Folio 标签的文档开始。文档只有两个**普通文档页**：第 1 页是封面，第 2 页是正文起始页。InDesign 的 Parent Page（旧称 Master Page，以下称“父版”）不算这两页。
+
+| 放在何处 | 在 InDesign 中做什么 | 图层面板中的对象名称 | Folio 角色 |
 | --- | --- | --- | --- |
-| 第 1 页 | 封面排版 | `Cover` | 必需 |
-| 封面标题文本框 | 放置文章标题，预留足够高度 | `hero-title` | 必需 |
-| 封面副标题文本框 | 放置文章副标题 | `hero-subtitle` | 使用副标题时必需 |
-| 封面图片框 | 封面主图；若提供角色，文章第一张图片会放入此处 | `hero-image` | 可选 |
-| 第 2 页 | 正文版式，并应用正文母版页 | `Article` | 必需 |
-| 正文母版页上的主文本框 | 正文排版区域，宽高应适合连续排文 | `article-flow` | 必需 |
-| 段落、字符和对象样式 | 控制文章中的各种内容块 | 见下表 | 按文章内容需要 |
+| 第 1 页 | 封面页 | 无需命名页面 | `Cover` |
+| 第 1 页 | 一个空的主标题**文本框** | `Hero Title` | `hero-title` |
+| 第 1 页 | 一个空的副标题**文本框** | `Hero Subtitle` | `hero-subtitle` |
+| 第 1 页 | 一个空的矩形**图片框** | `Hero Image` | `hero-image` |
+| 第 2 页 | 正文第一页 | 无需命名页面 | `Article` |
+| 第 2 页 | 一个空的正文主**文本框** | `Article Flow` | `article-flow` |
 
-Folio 会在输出副本中保留封面、正文页以及可选的 `Ending` 页面；其他未标记页面不会作为模板页面保留。超出正文框的文字会由 InDesign 报告，Folio 再按正文页版式追加页面。
+这份完整交付示例和下方脚本要求保留副标题框与封面图片框。Folio 的最低要求是封面、正文页、主标题框、正文主框以及必需样式；但文章一旦有副标题，就必须有副标题框和 `Subtitle` 样式。产品本身允许不设置封面图片框，但本指南的现成脚本按有封面图片框的版本检查，不要只删掉图片框后照用脚本。若保留封面图片框，Folio 会把文章的**第一张图片**同时放在封面和正文中，并不会从正文移走该图。
 
-### 在 InDesign 中建立页面和版式
+正文主框只做**一个**，放在第 2 个普通文档页上。不要同时在正文父版和第 2 页各放一个同名主框，也不要预先把它连到其他文本框。文章超出一页时，Folio 会自动添加正文页，并在新页上建立同位置的新正文框。固定的页眉、页码、色块和装饰应放在应用于第 2 页的正文父版上，这样新增正文页才会重复这些元素。只画在第 2 页上的装饰不会自动复制到后续正文页。
 
-1. 选择 **File > New > Document**，创建一个适合项目的文档。此处以 A4 竖版为例。页边距、栏数、网格、出血和颜色都可按设计需要调整。
-2. 保留两页：第一页作为封面，第二页作为正文起始页。需要页码、页眉或通栏装饰时，可将其放在正文母版页上。
-3. 打开 **Window > Pages**。新建或使用一个正文母版页（InDesign 新版本中称为 Parent Page，旧版可能显示 Master Page）。在该母版页上创建一个主文本框，放在正文区域内；把此框设置为自动布局时容易延续的尺寸。你可以在框中加入少量占位文字进行视觉调试，正式使用前建议清空。
-4. 将第 2 页应用到这个正文母版页。Folio 需要从母版上的 `article-flow` 框复制正文排版区域到输出文档中的正文页。
-5. 回到第 1 页作为封面。建立标题文本框；如果文章会使用副标题，再建立副标题文本框。可按设计添加图片框、底色、装饰图形和其他静态元素。
-6. 在 **Window > Layers** 展开图层，为需要由脚本识别的框设置易辨认且唯一的对象名称：`Hero Title`、`Hero Subtitle`、`Hero Image` 和 `Article Flow`。在图层面板中单击对象名称并修改。下面脚本会按这些名称查找框。
-7. 在 **Window > Styles > Paragraph Styles** 创建段落样式；在 **Window > Styles > Character Styles** 创建字符样式；在 **Window > Styles > Object Styles** 创建对象样式。建议统一使用下表中的英文样式名，样式名区分大小写。
-8. 保存 `.indd` 文件，然后执行下面的角色标记脚本。脚本按文档页序把第 1 页标记为封面，第 2 页标记为正文；如果页序不同，请先调整页序或修改脚本页索引。
-9. 保存文档，再回 Folio 选择该模板。查看模板扫描结果，确保没有缺少角色或重复角色的错误。
+### 在 InDesign 中逐步制作
 
-### 样式角色
+1. 选择 **File > New > Document**。把页数设为 **2**、关闭 **Facing Pages**（对页），示例尺寸选 A4 竖版。按实际需求设置边距、出血和颜色模式。先保存为一个新 `.indd` 文件，例如 `Folio-Article-Template.indd`。
+2. 打开 **Window > Pages**。第 1 页保留作封面。在第 2 页使用的父版上绘制需要在每一页正文重复出现的固定设计，例如页码和页眉；把这个父版应用到第 2 页。不要在父版上再建立 `Article Flow` 主框。
+3. 回到第 1 页，建立主标题文本框、副标题文本框和矩形图片框。标题框要留出长标题换行后的空间，副标题框也要容纳实际样稿；不要只按“标题”两个示例字决定高度。图片框可以设置裁切和贴合方式，检查横图、竖图放入时的效果。
+4. 在第 2 页的正文安全区域建立一个主文本框。给正文留够页边距，并考虑页眉页脚、图片和说明文字会占用的空间。正文从这个框开始向后续页面流动。不要把整篇样稿留在框内，也不要把框放到页面外的工作区。
+5. 打开 **Window > Layers**，展开对象，分别把四个框重命名为上表中的 `Hero Title`、`Hero Subtitle`、`Hero Image`、`Article Flow`。每个名称只能出现一次。其他装饰对象不要使用这些名称。
+6. 按下一节建立样式，实际设置字体、字号、行距、颜色、段落间距和图片外观。样式需要存在于这份文档中；仅把文字手动改成某种外观、却没有建立对应样式，不符合要求。
+7. 清空四个可变内容框中的样稿文字和样稿图片，检查封面与正文的固定元素仍完整。再保存一次。
+8. 按“写入角色标签”运行一次脚本，保存、关闭并重新打开 `.indd`。最后按“验收与交付”检查。
 
-推荐将样式直接创建在对应样式面板的根层级，并使用下列简单名称，方便脚本按名称找到它们。
+### 需要建立的 12 个样式
 
-| InDesign 样式类型 | 建议的样式名 | 角色值 | 用途 |
-| --- | --- | --- | --- |
-| 段落 | `ArticleTitle` | `ArticleTitle` | 封面标题；必需 |
-| 段落 | `Subtitle` | `Subtitle` | 封面副标题；有副标题内容时需要 |
-| 段落 | `SectionHeading` | `SectionHeading` | 正文二级标题 |
-| 段落 | `Subheading` | `Subheading` | 正文三级及更深标题 |
-| 段落 | `Body` | `Body` | 正文段落；必需 |
-| 段落 | `Quote` | `Quote` | Markdown 引用 |
-| 段落 | `Caption` | `Caption` | 图片说明 |
-| 字符 | `Emphasis` | `Emphasis` | 粗体和斜体文字 |
-| 字符 | `Link` | `Link` | 链接文字 |
-| 字符 | `Code` | `Code` | 行内代码 |
-| 对象 | `InlineImage` | `InlineImage` | 正文内图片对象样式；文章使用图片时需要 |
-| 对象 | `HeroImage` | `HeroImage` | 封面图片对象样式；可选 |
+打开 **Window > Styles > Paragraph Styles**、**Character Styles** 和 **Object Styles**。按表建立样式，放在各面板的顶层，不要放进同名样式组。左栏是样式类型，名称要逐字相同；右栏说明何时会用到。下面的脚本会把同名角色写入这些样式。
 
-### 角色标记脚本
+| 样式类型 | 样式名称与角色 | 设计用途 |
+| --- | --- | --- |
+| 段落 | `ArticleTitle` | 封面主标题；必需，检查长标题是否溢出。 |
+| 段落 | `Subtitle` | 封面副标题；文章有副标题时必需。 |
+| 段落 | `SectionHeading` | 正文一级小节标题，即文章中的 `##` 标题；必需。 |
+| 段落 | `Subheading` | 更深一级的小标题，即 `###` 及更深标题。 |
+| 段落 | `Body` | 普通正文；必需。 |
+| 段落 | `Quote` | 单段引文。 |
+| 段落 | `Caption` | 图片下方的说明文字。 |
+| 字符 | `Emphasis` | 粗体与斜体共用一种强调样式，请设计一个两者都适用的外观。 |
+| 字符 | `Link` | 链接文字的外观；不要假设 PDF 一定会生成可点击链接。 |
+| 字符 | `Code` | 正文中少量代码或编号的外观。 |
+| 对象 | `InlineImage` | 插入正文的图片框外观。 |
+| 对象 | `HeroImage` | 封面图片框外观。 |
 
-保存并运行下面的脚本。它会在当前活动文档中按页序标记页面，并按名称查找文本框及样式。如果你的对象或样式改了名称，请同步修改脚本中的名称。
+设置 `Body`、标题和说明样式时，选用本机可用、能显示所需中英文字符的字体，并确认最终使用电脑也有这些字体。尽量在样式中保存设计参数，不要依赖手动覆盖。图片对象样式应适合真实图片的比例；太大的正文图片会挤占正文空间。链接、字体和样式名称都应在最终文件里保持有效。
+
+### 写入角色标签：复制一次即可运行的脚本
+
+“角色标签”是文档内部的识别信息，类似给每个框贴一张看不见的用途卡片。Folio 读取的标签键固定为 `com.publisher.role`。InDesign 的 **Window > Utilities > Script Label** 面板只填写普通可见标签，**不能代替**这里的角色标签。下面的脚本会把角色写入当前打开的模板。它会先检查两页、四个框和 12 个样式是否都能唯一找到；有缺项时会报错，不会写入部分标签。
+
+1. 在 macOS 的“文本编辑”中新建文档，选择 **Format > Make Plain Text**（纯文本），把下方代码框内的内容**原样**复制进去。不要复制代码框外的文字，也不要改英文大小写。
+2. 保存为 `Folio-Label-Template.idjs`，确认扩展名是 `.idjs`，不是 `.idjs.txt`。如果“文本编辑”询问是否保留 `.idjs` 扩展名，选择保留。
+3. 在 InDesign 中打开 **Window > Utilities > Scripts**。在 **User**（用户）脚本文件夹上右键，选择 **Reveal in Finder**（在 Finder 中显示）。把刚保存的 `.idjs` 文件放进该文件夹；不要猜测系统里的脚本目录名称。
+4. 打开并激活要交付的模板 `.indd`，确认前两页和对象名称正确。在 Scripts 面板双击 `Folio-Label-Template.idjs`。如果出现英文错误，按错误中提示的名称检查页面、框或样式，再运行一次。
+5. 运行后**保存模板**。关闭 InDesign 文档，再重新打开这份 `.indd`，检查标签已随文件保留。
 
 ```javascript
 const { app } = require("indesign");
@@ -136,63 +157,116 @@ const { app } = require("indesign");
 const ROLE_KEY = "com.publisher.role";
 const document = app.activeDocument;
 
-function labelByName(collection, name, role) {
-  const target = collection.itemByName(name);
-  if (!target || target.isValid === false) {
-    throw new Error("Could not find InDesign object named: " + name);
+function items(collection) {
+  const result = [];
+  for (let index = 0; index < collection.length; index += 1) {
+    result.push(typeof collection.item === "function" ? collection.item(index) : collection[index]);
   }
-  target.insertLabel(ROLE_KEY, role);
+  return result;
 }
 
-function labelStyles(collection, definitions) {
-  for (const definition of definitions) {
-    labelByName(collection, definition.name, definition.role);
+function named(collection, name) {
+  const matches = items(collection).filter((item) => String(item.name) === name);
+  if (matches.length !== 1) {
+    throw new Error("Expected exactly one object named " + name + "; found " + matches.length);
+  }
+  return matches[0];
+}
+
+if (!document || document.pages.length !== 2) {
+  throw new Error("Open a two-page template document before running this script.");
+}
+
+const cover = document.pages.item(0);
+const article = document.pages.item(1);
+const frames = [
+  { object: named(document.textFrames, "Hero Title"), role: "hero-title", page: cover },
+  { object: named(document.textFrames, "Hero Subtitle"), role: "hero-subtitle", page: cover },
+  { object: named(document.allPageItems, "Hero Image"), role: "hero-image", page: cover },
+  { object: named(document.textFrames, "Article Flow"), role: "article-flow", page: article }
+];
+
+for (const frame of frames) {
+  if (!frame.object.parentPage || frame.object.parentPage.id !== frame.page.id) {
+    throw new Error("Frame " + frame.object.name + " is not on the expected document page.");
   }
 }
-
-if (!document || document.pages.length < 2) {
-  throw new Error("Open a template document with a Cover page and an Article page first.");
+if (String(frames[2].object.constructor.name) !== "Rectangle") {
+  throw new Error("Hero Image must be a rectangle image frame.");
 }
 
-document.pages.item(0).insertLabel(ROLE_KEY, "Cover");
-document.pages.item(1).insertLabel(ROLE_KEY, "Article");
+const styles = [
+  { object: named(document.allParagraphStyles, "ArticleTitle"), role: "ArticleTitle" },
+  { object: named(document.allParagraphStyles, "Subtitle"), role: "Subtitle" },
+  { object: named(document.allParagraphStyles, "SectionHeading"), role: "SectionHeading" },
+  { object: named(document.allParagraphStyles, "Subheading"), role: "Subheading" },
+  { object: named(document.allParagraphStyles, "Body"), role: "Body" },
+  { object: named(document.allParagraphStyles, "Quote"), role: "Quote" },
+  { object: named(document.allParagraphStyles, "Caption"), role: "Caption" },
+  { object: named(document.allCharacterStyles, "Emphasis"), role: "Emphasis" },
+  { object: named(document.allCharacterStyles, "Link"), role: "Link" },
+  { object: named(document.allCharacterStyles, "Code"), role: "Code" },
+  { object: named(document.allObjectStyles, "InlineImage"), role: "InlineImage" },
+  { object: named(document.allObjectStyles, "HeroImage"), role: "HeroImage" }
+];
 
-labelByName(document.allPageItems, "Hero Title", "hero-title");
-labelByName(document.allPageItems, "Hero Subtitle", "hero-subtitle");
-labelByName(document.allPageItems, "Article Flow", "article-flow");
+cover.insertLabel(ROLE_KEY, "Cover");
+article.insertLabel(ROLE_KEY, "Article");
+for (const frame of frames) frame.object.insertLabel(ROLE_KEY, frame.role);
+for (const style of styles) style.object.insertLabel(ROLE_KEY, style.role);
 
-const heroImage = document.allPageItems.itemByName("Hero Image");
-if (heroImage && heroImage.isValid !== false) {
-  heroImage.insertLabel(ROLE_KEY, "hero-image");
-}
-
-labelStyles(document.paragraphStyles, [
-  { name: "ArticleTitle", role: "ArticleTitle" },
-  { name: "Subtitle", role: "Subtitle" },
-  { name: "SectionHeading", role: "SectionHeading" },
-  { name: "Subheading", role: "Subheading" },
-  { name: "Body", role: "Body" },
-  { name: "Quote", role: "Quote" },
-  { name: "Caption", role: "Caption" }
-]);
-
-labelStyles(document.characterStyles, [
-  { name: "Emphasis", role: "Emphasis" },
-  { name: "Link", role: "Link" },
-  { name: "Code", role: "Code" }
-]);
-
-labelStyles(document.objectStyles, [
-  { name: "InlineImage", role: "InlineImage" },
-  { name: "HeroImage", role: "HeroImage" }
-]);
-
-console.log("Folio roles were added to: " + document.name);
+console.log("Folio template roles added to " + document.name);
 ```
 
-在 InDesign 中，打开 **Window > Utilities > Scripts**。将 `.idjs` 文件放进该面板的用户脚本目录；可以从 Scripts 面板的用户脚本项目菜单中打开脚本所在文件夹。先激活准备好的模板文档，再在 Scripts 面板中双击该脚本。运行完成后保存模板。
+### 验收与交付
 
-这是一个面向上表名称的示例脚本。若 InDesign 报“找不到对象或样式”，请检查对象是否确实位于当前文档/母版页、名称是否完全一致，以及段落/字符/对象样式类型是否正确。不要把角色值写到普通的 **Script Label** 面板中。
+**先做结构检查。** 在 Folio 中选择 **InDesign 模板 > 选择模板**，打开刚保存的 `.indd`。模板应显示“已就绪”，预检中没有模板错误。如果文档能被扫描，并不代表长文字、图片或导出效果已经验收；还必须做一次实际发布。当前项目的真实设计模板仍需通过这项主机验收。
+
+**再做内容检查。** 可以请委托方在 Folio 中完成。先用一篇短文章，确认封面标题、副标题和正文小节都进入正确位置；再用一篇比一页长的文章，确认后续正文页的页眉页码、边距和正文框保持一致，文字没有丢失或压到装饰上。最后加入一张本机图片和图片说明，检查封面、正文、PDF 和逐页 PNG 预览。下面这份样稿可以直接复制到 Folio 的文章编辑区；`##` 等符号是 Folio 的文章格式标记，设计师不必修改它们。把文章保存为 `template-check.md`，在同一文件夹建立 `images` 文件夹，并在其中放一张名为 `sample.jpg` 的真实照片。
+
+```markdown
+---
+title: "一份用于检查长标题换行效果的封面标题"
+subtitle: "用于检查副标题、中文与英文混排的示例文字"
+---
+
+## 第一节：正文排版
+
+这是一段正文。请检查**强调文字**、*斜体文字*、[链接文字](https://example.org)和行内代码 `A-102` 的外观。
+
+### 更深一级的小标题
+
+这里继续写正文，确认不同层级的标题和段落之间有清楚的间距。
+
+> 这是一段用于检查引文样式的文字。
+
+![图片说明](images/sample.jpg "这是一条用于检查图片说明样式的图注")
+
+## 第二节：续页检查
+
+将这一段正文复制多次，直到排版超过一页，再检查新增正文页。
+```
+
+逐页核对：长标题与副标题无溢出；中文、英文和数字均能显示；引文和说明文字可读；图片不变形、重要部分未被裁掉；正文续页的固定设计一致；没有缺字、缺图、字体替换或意外空白页。Folio 的“已就绪”只说明角色检查通过，最终视觉效果以实际发布的 INDD、PDF 和 PNG 为准。
+
+交付时请提供：
+
+- 最终 `.indd` 模板，而不是只给 PDF 或截图；模板内的可变内容框已清空。
+- 模板用到的外部图片、标识等原始文件，以及可正常打开的链接路径；说明所用字体名称和字体交付或授权方式。
+- 一份简短说明，写明页面尺寸、出血、是否有封面图片框、建议的标题长度，以及已用哪篇样稿测试。
+- 测试发布得到的 PDF 或逐页预览图，供委托方确认版式。
+
+### 遇到问题时怎么查
+
+| 现象 | 先检查什么 |
+| --- | --- |
+| 脚本提示 `Expected exactly one object named ...; found 0` | 图层面板或样式面板中是否真的有该英文名称；框类型是否正确；对象是否在当前文档。 |
+| 脚本提示 `found 2` 或更多 | 是否有两个同名框或样式。每个名称只保留一个。 |
+| 脚本提示框不在指定页面 | 标题、副标题和封面图片应在普通第 1 页；正文主框应在普通第 2 页，不能在父版或页面外。 |
+| Folio 提示缺少或重复角色 | 确认脚本运行后已保存；关闭重开文档再扫描。若从旧模板复制，检查是否留下旧的 Folio 角色标签。 |
+| 短文能发布，长文不正常 | 检查第 2 页的 `Article Flow` 框和正文父版，尤其是父版装饰是否覆盖新建的正文框。 |
+| 有副标题或图片时失败 | 检查对应框、`Subtitle`、`InlineImage`、`Caption` 等样式，以及本地图片文件是否存在。 |
+| 页面字体或图片变了 | 在 InDesign 检查字体状态、Links（链接）面板、图片裁切和对象样式，再重新发布。 |
 
 ## 常见问题
 
