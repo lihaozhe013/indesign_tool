@@ -26,6 +26,7 @@
   },
   "bundle": {
     "active": true,
+    "icon": ["icons/icon.icns"],
     "targets": ["app", "dmg"],
     "macOS": {
       "infoPlist": "Info.plist",
